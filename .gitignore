@@ -1,0 +1,19 @@
+# Python virtual environment — never commit this
+.venv/
+
+# Python cache files — auto-generated, not needed
+__pycache__/
+*.pyc
+*.pyo
+
+# Data cache — rebuilt automatically on app startup
+data/cache/
+
+# Streamlit secrets (if you ever add a password) — keep private
+.streamlit/secrets.toml
+
+# VS Code workspace settings
+.vscode/
+
+# macOS metadata
+.DS_Store

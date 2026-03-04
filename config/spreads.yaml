@@ -1,0 +1,194 @@
+# ============================================================
+#  Spread Universe Configuration
+#  To ADD a spread: add an entry under the correct commodity.
+#  To ADD a commodity: copy an existing block and update it.
+#  No Python changes required — just edit this file.
+# ============================================================
+#
+#  prophetx_prefix: the ProphetX symbol prefix for this commodity.
+#    Corn       → @C      e.g. @CN24 = Corn July 2024
+#    Wheat      → @W      e.g. @WZ24 = Wheat December 2024
+#    Soy Meal   → @SM     e.g. @SMN24 = Soy Meal July 2024
+#    Cattle     → @LC     e.g. @LCZ24 = Live Cattle December 2024
+#    Hogs       → @LH     e.g. @LHZ24 = Lean Hogs December 2024
+#    Nat Gas    → @NG     e.g. @NGN24 = Nat Gas July 2024
+#
+#  Month letter codes:
+#    F=Jan  G=Feb  H=Mar  J=Apr  K=May  M=Jun
+#    N=Jul  Q=Aug  U=Sep  V=Oct  X=Nov  Z=Dec
+#
+#  year_offset:
+#    0 = contract expires in the season year
+#    1 = contract expires in season year + 1
+#    e.g. Dec-Mar spread: December is offset 0, March is offset 1
+#
+#  Window logic:
+#    start_mmdd / end_mmdd define the season window on the x-axis.
+#    If start_mmdd > end_mmdd the window wraps across a calendar year.
+# ============================================================
+
+commodities:
+
+  Corn:
+    unit: "cents/bu"
+    prophetx_prefix: "@C"
+    spreads:
+      - id: "C_N-U"
+        name: "Jul-Sep"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "U", year_offset: 0}   # September
+
+      - id: "C_U-Z"
+        name: "Sep-Dec"
+        window: {start_mmdd: "09-15", end_mmdd: "09-10"}
+        legs:
+          - {month: "U", year_offset: 0}   # September
+          - {month: "Z", year_offset: 0}   # December
+
+      - id: "C_Z-H"
+        name: "Dec-Mar"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0}   # December (season year)
+          - {month: "H", year_offset: 1}   # March    (season year + 1)
+
+      - id: "C_Z-N"
+        name: "Dec-Jul"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0}   # December (season year)
+          - {month: "N", year_offset: 1}   # July     (season year + 1)
+
+  Wheat:
+    unit: "cents/bu"
+    prophetx_prefix: "@W"
+    spreads:
+      - id: "W_N-U"
+        name: "Jul-Sep"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "U", year_offset: 0}   # September
+
+      - id: "W_U-Z"
+        name: "Sep-Dec"
+        window: {start_mmdd: "09-15", end_mmdd: "09-10"}
+        legs:
+          - {month: "U", year_offset: 0}   # September
+          - {month: "Z", year_offset: 0}   # December
+
+      - id: "W_Z-N"
+        name: "Dec-Jul"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0}   # December (season year)
+          - {month: "N", year_offset: 1}   # July     (season year + 1)
+
+  SoyMeal:
+    unit: "$/ton"
+    prophetx_prefix: "@SM"
+    spreads:
+      - id: "SM_F-H"
+        name: "Jan-Mar"
+        window: {start_mmdd: "01-15", end_mmdd: "01-12"}
+        legs:
+          - {month: "F", year_offset: 0}   # January
+          - {month: "H", year_offset: 0}   # March
+
+      - id: "SM_K-U"
+        name: "May-Sep"
+        window: {start_mmdd: "05-15", end_mmdd: "05-12"}
+        legs:
+          - {month: "K", year_offset: 0}   # May
+          - {month: "U", year_offset: 0}   # September
+
+      - id: "SM_N-Z"
+        name: "Jul-Dec"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "Z", year_offset: 0}   # December
+
+  LiveCattle:
+    unit: "cents/lb"
+    prophetx_prefix: "@LC"
+    spreads:
+      - id: "LC_Q-V"
+        name: "Aug-Oct"
+        window: {start_mmdd: "09-01", end_mmdd: "08-27"}
+        legs:
+          - {month: "Q", year_offset: 0}   # August
+          - {month: "V", year_offset: 0}   # October
+
+      - id: "LC_V-Z"
+        name: "Oct-Dec"
+        window: {start_mmdd: "11-01", end_mmdd: "10-27"}
+        legs:
+          - {month: "V", year_offset: 0}   # October
+          - {month: "Z", year_offset: 0}   # December
+
+      - id: "LC_Z-G"
+        name: "Dec-Feb"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0}   # December (season year)
+          - {month: "G", year_offset: 1}   # February (season year + 1)
+
+  LeanHogs:
+    unit: "cents/lb"
+    prophetx_prefix: "@LH"
+    spreads:
+      - id: "HG_J-M"
+        name: "Apr-Jun"
+        window: {start_mmdd: "04-18", end_mmdd: "03-31"}
+        legs:
+          - {month: "J", year_offset: 0}   # April
+          - {month: "M", year_offset: 0}   # June
+
+      - id: "HG_M-Q"
+        name: "Jun-Aug"
+        window: {start_mmdd: "06-15", end_mmdd: "06-09"}
+        legs:
+          - {month: "M", year_offset: 0}   # June
+          - {month: "Q", year_offset: 0}   # August
+
+      - id: "HG_Q-V"
+        name: "Aug-Oct"
+        window: {start_mmdd: "08-15", end_mmdd: "08-10"}
+        legs:
+          - {month: "Q", year_offset: 0}   # August
+          - {month: "V", year_offset: 0}   # October
+
+      - id: "HG_V-Z"
+        name: "Oct-Dec"
+        window: {start_mmdd: "10-15", end_mmdd: "10-10"}
+        legs:
+          - {month: "V", year_offset: 0}   # October
+          - {month: "Z", year_offset: 0}   # December
+
+      - id: "HG_Z-G"
+        name: "Dec-Feb"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0}   # December (season year)
+          - {month: "G", year_offset: 1}   # February (season year + 1)
+
+  NatGas:
+    unit: "$/MMBtu"
+    prophetx_prefix: "@NG"
+    spreads:
+      - id: "NG_N-Q"
+        name: "Jul-Aug"
+        window: {start_mmdd: "06-29", end_mmdd: "06-23"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "Q", year_offset: 0}   # August
+
+      - id: "NG_F-G"
+        name: "Jan-Feb"
+        window: {start_mmdd: "01-03", end_mmdd: "12-14"}
+        legs:
+          - {month: "F", year_offset: 0}   # January
+          - {month: "G", year_offset: 0}   # February
