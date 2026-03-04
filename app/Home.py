@@ -66,4 +66,4 @@ for i, comm in enumerate(commodities):
         st.caption(spread_list)
 
 st.markdown("---")
-st.caption("Data source: Yahoo Finance  |  Refresh: hourly  |  For internal use only.")
+st.caption("Data source: DTN ProphetX  |  Refresh: hourly  |  For internal use only.")
