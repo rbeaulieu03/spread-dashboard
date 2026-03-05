@@ -217,3 +217,28 @@ commodities:
         legs:
           - {month: "Z", year_offset: 0}   # December (season year)
           - {month: "N", year_offset: 1}   # July     (season year + 1)
+
+  SoyOil:
+    unit: "cents/lb"
+    prophetx_prefix: "@BO"
+    spreads:
+      - id: "BO_F-H"
+        name: "Jan-Mar"
+        window: {start_mmdd: "01-15", end_mmdd: "01-12"}
+        legs:
+          - {month: "F", year_offset: 0}   # January
+          - {month: "H", year_offset: 0}   # March
+
+      - id: "BO_K-U"
+        name: "May-Sep"
+        window: {start_mmdd: "05-15", end_mmdd: "05-12"}
+        legs:
+          - {month: "K", year_offset: 0}   # May
+          - {month: "U", year_offset: 0}   # September
+
+      - id: "BO_N-Z"
+        name: "Jul-Dec"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "Z", year_offset: 0}   # December

@@ -49,6 +49,7 @@ _COMMODITY_FILES = {
     "LeanHogs":   "hogs.xlsx",
     "NatGas":     "natgas.xlsx",
     "KCWheat":    "kcwheat.xlsx",
+    "SoyOil":     "soyoil.xlsx",
 }
 
 

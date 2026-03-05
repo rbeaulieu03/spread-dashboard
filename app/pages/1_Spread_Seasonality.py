@@ -21,7 +21,7 @@ from src.plotting          import build_seasonality_chart
 
 # ── Page setup ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title = "Seasonality Chart",
+    page_title = "Spread Seasonality Chart",
     page_icon  = "📈",
     layout     = "wide",
 )
