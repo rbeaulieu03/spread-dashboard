@@ -192,3 +192,28 @@ commodities:
         legs:
           - {month: "F", year_offset: 0}   # January
           - {month: "G", year_offset: 0}   # February
+
+  KCWheat:
+    unit: "cents/bu"
+    prophetx_prefix: "@KW"
+    spreads:
+      - id: "KW_N-U"
+        name: "Jul-Sep"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "U", year_offset: 0}   # September
+
+      - id: "KW_U-Z"
+        name: "Sep-Dec"
+        window: {start_mmdd: "09-15", end_mmdd: "09-10"}
+        legs:
+          - {month: "U", year_offset: 0}   # September
+          - {month: "Z", year_offset: 0}   # December
+
+      - id: "KW_Z-N"
+        name: "Dec-Jul"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0}   # December (season year)
+          - {month: "N", year_offset: 1}   # July     (season year + 1)
