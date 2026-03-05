@@ -113,7 +113,7 @@ commodities:
 
   LiveCattle:
     unit: "cents/lb"
-    prophetx_prefix: "@LC"
+    prophetx_prefix: "@LE"
     spreads:
       - id: "LC_Q-V"
         name: "Aug-Oct"
@@ -138,7 +138,7 @@ commodities:
 
   LeanHogs:
     unit: "cents/lb"
-    prophetx_prefix: "@LH"
+    prophetx_prefix: "@HE"
     spreads:
       - id: "HG_J-M"
         name: "Apr-Jun"
