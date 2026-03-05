@@ -177,7 +177,7 @@ commodities:
 
   NatGas:
     unit: "$/MMBtu"
-    prophetx_prefix: "@NG"
+    prophetx_prefix: "QNG"
     spreads:
       - id: "NG_N-Q"
         name: "Jul-Aug"
