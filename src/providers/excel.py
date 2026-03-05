@@ -48,6 +48,7 @@ _COMMODITY_FILES = {
     "LiveCattle": "cattle.xlsx",
     "LeanHogs":   "hogs.xlsx",
     "NatGas":     "natgas.xlsx",
+    "KCWheat":    "kcwheat.xlsx",
 }
 
 
@@ -117,7 +118,8 @@ def load_commodity_file(commodity: str) -> tuple:
             if col_idx == 0:
                 continue
             cell_str = str(cell).strip()
-            if cell_str.startswith("@") and cell_str != "nan":
+            # Accept any non-empty header that is not a blank/nan/DAILY label
+            if cell_str not in ("", "nan", "DAILY", "Description"):
                 tickers.append(cell_str)
                 ticker_col_indices.append(col_idx)
 
