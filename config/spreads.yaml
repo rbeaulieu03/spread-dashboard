@@ -90,6 +90,13 @@ commodities:
     unit: "$/ton"
     prophetx_prefix: "@SM"
     spreads:
+      - id: "SM_N-U"
+        name: "Jul-Sep"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0}   # July
+          - {month: "U", year_offset: 0}   # September
+
       - id: "SM_F-H"
         name: "Jan-Mar"
         window: {start_mmdd: "01-15", end_mmdd: "01-12"}
@@ -242,3 +249,42 @@ commodities:
         legs:
           - {month: "N", year_offset: 0}   # July
           - {month: "Z", year_offset: 0}   # December
+
+  WheatCorn:
+    unit: "cents/bu"
+    prophetx_prefix: null
+    spreads:
+      - id: "WC_H"
+        name: "Mar"
+        window: {start_mmdd: "03-15", end_mmdd: "03-10"}
+        legs:
+          - {month: "H", year_offset: 0, commodity: "Wheat"}
+          - {month: "H", year_offset: 0, commodity: "Corn"}
+
+      - id: "WC_K"
+        name: "May"
+        window: {start_mmdd: "05-15", end_mmdd: "05-10"}
+        legs:
+          - {month: "K", year_offset: 0, commodity: "Wheat"}
+          - {month: "K", year_offset: 0, commodity: "Corn"}
+
+      - id: "WC_N"
+        name: "Jul"
+        window: {start_mmdd: "07-15", end_mmdd: "07-10"}
+        legs:
+          - {month: "N", year_offset: 0, commodity: "Wheat"}
+          - {month: "N", year_offset: 0, commodity: "Corn"}
+
+      - id: "WC_U"
+        name: "Sep"
+        window: {start_mmdd: "09-15", end_mmdd: "09-10"}
+        legs:
+          - {month: "U", year_offset: 0, commodity: "Wheat"}
+          - {month: "U", year_offset: 0, commodity: "Corn"}
+
+      - id: "WC_Z"
+        name: "Dec"
+        window: {start_mmdd: "12-15", end_mmdd: "12-10"}
+        legs:
+          - {month: "Z", year_offset: 0, commodity: "Wheat"}
+          - {month: "Z", year_offset: 0, commodity: "Corn"}

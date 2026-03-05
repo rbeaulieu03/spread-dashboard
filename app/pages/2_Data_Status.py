@@ -57,14 +57,43 @@ if st.button("▶️ Run Status Check", type="primary"):
 
         st.subheader(commodity)
 
-        # ── Check that the Excel file loads ───────────────────────────────
-        contract_data, load_msg = load_commodity_file(commodity)
-        if not contract_data:
-            st.error(f"❌ {load_msg}")
-            st.divider()
-            continue
+        # ── Detect intercommodity spread ──────────────────────────────────
+        # If any leg specifies its own commodity key, this is an
+        # intercommodity spread — load each leg's file separately.
+        all_legs     = [leg for s in spreads for leg in s["legs"]]
+        is_intercmdy = any("commodity" in leg for leg in all_legs)
+
+        if is_intercmdy:
+            # Collect unique source commodities from leg definitions
+            source_commodities = list({
+                leg.get("commodity", commodity)
+                for leg in all_legs
+            })
+            all_ok = True
+            for src in sorted(source_commodities):
+                src_data, src_msg = load_commodity_file(src)
+                if src_data:
+                    st.success(f"✅ {src_msg}")
+                else:
+                    st.error(f"❌ {src_msg}")
+                    all_ok = False
+            if not all_ok:
+                st.divider()
+                continue
+            # Build a combined lookup dict keyed by commodity
+            multi_data = {}
+            for src in source_commodities:
+                multi_data[src], _ = load_commodity_file(src)
         else:
-            st.success(f"✅ {load_msg}")
+            # Standard same-commodity spread
+            contract_data, load_msg = load_commodity_file(commodity)
+            if not contract_data:
+                st.error(f"❌ {load_msg}")
+                st.divider()
+                continue
+            else:
+                st.success(f"✅ {load_msg}")
+            multi_data = {commodity: contract_data}
 
         # ── Check each spread leg for each season year ────────────────────
         for spread_def in spreads:
@@ -73,15 +102,25 @@ if st.button("▶️ Run Status Check", type="primary"):
 
             for year in season_years:
                 for leg_i, leg in enumerate(spread_def["legs"]):
-                    leg_year = year + leg.get("year_offset", 0)
-                    symbol   = build_prophetx_symbol(prefix, leg["month"], leg_year)
-                    series   = contract_data.get(symbol)
+                    leg_year      = year + leg.get("year_offset", 0)
+                    leg_commodity = leg.get("commodity", commodity)
+
+                    # Use the correct prefix for this leg's commodity
+                    if leg_commodity != commodity:
+                        leg_cfg    = get_commodity_info(config, leg_commodity)
+                        leg_prefix = leg_cfg.get("prophetx_prefix", "") if leg_cfg else ""
+                    else:
+                        leg_prefix = prefix
+
+                    symbol       = build_prophetx_symbol(leg_prefix, leg["month"], leg_year)
+                    leg_data     = multi_data.get(leg_commodity, {})
+                    series       = leg_data.get(symbol)
 
                     if series is not None:
                         date_range = f"{series.index[0].date()} → {series.index[-1].date()}"
                         rows.append({
                             "Season Year": year,
-                            "Leg":         f"Leg {leg_i + 1}",
+                            "Leg":         f"Leg {leg_i + 1} ({leg_commodity})",
                             "Symbol":      symbol,
                             "Status":      "✅ OK",
                             "Days":        len(series),
@@ -90,11 +129,11 @@ if st.button("▶️ Run Status Check", type="primary"):
                     else:
                         rows.append({
                             "Season Year": year,
-                            "Leg":         f"Leg {leg_i + 1}",
+                            "Leg":         f"Leg {leg_i + 1} ({leg_commodity})",
                             "Symbol":      symbol,
                             "Status":      "❌ MISSING",
                             "Days":        0,
-                            "Date Range":  f"Add {symbol} column to your Excel file",
+                            "Date Range":  f"Add {symbol} column to {leg_commodity.lower()}.xlsx",
                         })
 
             df = pd.DataFrame(rows)

@@ -226,15 +226,58 @@ def build_prophetx_symbol(prophetx_prefix: str, month_code: str, year: int) -> s
 
 # ── Spread fetching ───────────────────────────────────────────────────────────
 
+def _get_leg_data(leg: dict, default_commodity: str, default_prefix: str, season_year: int) -> tuple:
+    """
+    Resolve one spread leg to a price series.
+
+    Supports both same-commodity legs (uses default_commodity and prefix)
+    and intercommodity legs (leg has a "commodity" key pointing to a
+    different commodity whose prefix is looked up from its own config).
+
+    Returns (symbol_str, price_series_or_None, status_str)
+    """
+    from src.config import load_spreads_config, get_commodity_info
+
+    leg_commodity = leg.get("commodity", default_commodity)
+    leg_year      = season_year + leg.get("year_offset", 0)
+
+    # If leg specifies a different commodity, look up that commodity's prefix
+    if leg_commodity != default_commodity:
+        cfg      = load_spreads_config()
+        leg_info = get_commodity_info(cfg, leg_commodity)
+        prefix   = leg_info.get("prophetx_prefix", "") if leg_info else ""
+    else:
+        prefix = default_prefix
+
+    if not prefix:
+        return None, None, f"FAILED — no prophetx_prefix for {leg_commodity}"
+
+    symbol        = build_prophetx_symbol(prefix, leg["month"], leg_year)
+    contract_data, load_msg = load_commodity_file(leg_commodity)
+
+    if not contract_data:
+        return symbol, None, f"FAILED — {load_msg}"
+
+    prices = contract_data.get(symbol)
+    if prices is None:
+        return symbol, None, f"NOT FOUND — add {symbol} column to {leg_commodity.lower()}.xlsx"
+
+    return symbol, prices, f"OK — {len(prices)} days"
+
+
 def fetch_spread_for_season(season_year: int, commodity: str, commodity_info: dict, spread_def: dict) -> tuple:
     """
-    Look up both contract legs from the loaded Excel data and compute
-    the spread (leg1 price − leg2 price) for one season year.
+    Look up both contract legs and compute the spread (leg1 - leg2).
+
+    Supports:
+      - Same-commodity spreads: both legs from the same Excel file
+      - Intercommodity spreads: each leg specifies its own "commodity" key
+        pointing to a different Excel file (e.g. Wheat vs Corn)
 
     Parameters
     ----------
     season_year    : int  — e.g. 2024
-    commodity      : str  — e.g. "Corn"
+    commodity      : str  — e.g. "Corn" or "WheatCorn"
     commodity_info : dict — from spreads.yaml
     spread_def     : dict — from spreads.yaml
 
@@ -244,53 +287,29 @@ def fetch_spread_for_season(season_year: int, commodity: str, commodity_info: di
         spread_series : pd.Series with DatetimeIndex, or None if data missing
         status_dict   : details for the Data Status page
     """
-    prefix = commodity_info.get("prophetx_prefix")
+    prefix = commodity_info.get("prophetx_prefix") or ""
     legs   = spread_def["legs"]
 
     status = {
-        "season_year":  season_year,
-        "leg1_symbol":  None,
-        "leg2_symbol":  None,
-        "leg1_status":  None,
-        "leg2_status":  None,
+        "season_year":   season_year,
+        "leg1_symbol":   None,
+        "leg2_symbol":   None,
+        "leg1_status":   None,
+        "leg2_status":   None,
         "spread_status": None,
     }
 
-    if not prefix:
-        status["spread_status"] = f"FAILED — no prophetx_prefix defined for {commodity} in spreads.yaml"
-        return None, status
-
-    # Load the full commodity file (cached after first load)
-    contract_data, load_msg = load_commodity_file(commodity)
-
-    if not contract_data:
-        status["spread_status"] = f"FAILED — {load_msg}"
-        return None, status
-
-    # Build symbol strings for each leg
-    leg1_year   = season_year + legs[0].get("year_offset", 0)
-    leg2_year   = season_year + legs[1].get("year_offset", 0)
-    leg1_symbol = build_prophetx_symbol(prefix, legs[0]["month"], leg1_year)
-    leg2_symbol = build_prophetx_symbol(prefix, legs[1]["month"], leg2_year)
+    # Resolve each leg independently (supports intercommodity)
+    leg1_symbol, leg1_prices, leg1_status = _get_leg_data(legs[0], commodity, prefix, season_year)
+    leg2_symbol, leg2_prices, leg2_status = _get_leg_data(legs[1], commodity, prefix, season_year)
 
     status["leg1_symbol"] = leg1_symbol
     status["leg2_symbol"] = leg2_symbol
-
-    # Look up each leg in the loaded contract data
-    leg1_prices = contract_data.get(leg1_symbol)
-    leg2_prices = contract_data.get(leg2_symbol)
-
-    status["leg1_status"] = (
-        f"OK — {len(leg1_prices)} days" if leg1_prices is not None
-        else f"NOT FOUND in Excel file — add {leg1_symbol} column to the spreadsheet"
-    )
-    status["leg2_status"] = (
-        f"OK — {len(leg2_prices)} days" if leg2_prices is not None
-        else f"NOT FOUND in Excel file — add {leg2_symbol} column to the spreadsheet"
-    )
+    status["leg1_status"] = leg1_status
+    status["leg2_status"] = leg2_status
 
     if leg1_prices is None or leg2_prices is None:
-        status["spread_status"] = "FAILED — one or both legs missing from Excel file"
+        status["spread_status"] = "FAILED — one or both legs missing"
         return None, status
 
     # Align on shared trading days and compute spread
