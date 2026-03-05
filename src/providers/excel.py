@@ -57,20 +57,32 @@ _COMMODITY_FILES = {
 
 def _excel_serial_to_date(serial) -> pd.Timestamp | None:
     """
-    Convert an Excel serial date number to a pandas Timestamp.
+    Convert a date value to a pandas Timestamp.
 
-    Excel counts days from 1900-01-01 (with a historical leap year bug
-    that adds 1 extra day, which is why we subtract 2 instead of 1).
-
-    Examples:
-        46085 → 2026-03-04
-        44927 → 2023-01-01
+    Handles two formats:
+      1. Excel serial number (e.g. 46085 → 2026-03-04)
+      2. Text date string (e.g. "1/15/2021", "01/15/2021", "2021-01-15")
     """
-    try:
-        serial = int(float(serial))
-        return pd.Timestamp("1899-12-30") + pd.Timedelta(days=serial)
-    except (ValueError, TypeError):
+    val = str(serial).strip()
+    if val in ("", "nan"):
         return None
+
+    # Try as Excel serial number first (pure integer or float string)
+    try:
+        serial_int = int(float(val))
+        # Sanity check: valid Excel dates are roughly 30000-50000 for years 1982-2036
+        if 30000 < serial_int < 60000:
+            return pd.Timestamp("1899-12-30") + pd.Timedelta(days=serial_int)
+    except (ValueError, TypeError):
+        pass
+
+    # Try as a text date string using pandas parser (handles most common formats)
+    try:
+        return pd.Timestamp(val)
+    except Exception:
+        pass
+
+    return None
 
 
 # ── File loading ──────────────────────────────────────────────────────────────
