@@ -49,7 +49,9 @@ _COMMODITY_FILES = {
     "LeanHogs":   "hogs.xlsx",
     "NatGas":     "natgas.xlsx",
     "KCWheat":    "kcwheat.xlsx",
-    "SoyOil":     "soyoil.xlsx",
+    "SoyOil":      "soyoil.xlsx",
+    "LeanHogIndex": "hog_index.xlsx",
+    "WheatCorn":   None,   # intercommodity — no own file
 }
 
 
@@ -230,18 +232,35 @@ def _get_leg_data(leg: dict, default_commodity: str, default_prefix: str, season
     """
     Resolve one spread leg to a price series.
 
-    Supports both same-commodity legs (uses default_commodity and prefix)
-    and intercommodity legs (leg has a "commodity" key pointing to a
-    different commodity whose prefix is looked up from its own config).
+    Supports three leg types:
+      1. Standard contract leg: prefix + month + year  (e.g. @HEZ25)
+      2. Intercommodity leg:    leg has "commodity" key (e.g. Wheat vs Corn)
+      3. Continuous/index leg:  leg has "type": "continuous" and "symbol" key
+                                 (e.g. IHX.X lean hog index — no month/year)
 
     Returns (symbol_str, price_series_or_None, status_str)
     """
     from src.config import load_spreads_config, get_commodity_info
 
+    # ── Type 3: continuous/index leg ─────────────────────────────────────────
+    if leg.get("type") == "continuous":
+        symbol        = leg["symbol"]
+        leg_commodity = leg.get("commodity", default_commodity)
+        contract_data, load_msg = load_commodity_file(leg_commodity)
+
+        if not contract_data:
+            return symbol, None, f"FAILED — {load_msg}"
+
+        prices = contract_data.get(symbol)
+        if prices is None:
+            return symbol, None, f"NOT FOUND — add {symbol} column to the index Excel file"
+
+        return symbol, prices, f"OK — {len(prices)} days"
+
+    # ── Types 1 & 2: contract-month legs ─────────────────────────────────────
     leg_commodity = leg.get("commodity", default_commodity)
     leg_year      = season_year + leg.get("year_offset", 0)
 
-    # If leg specifies a different commodity, look up that commodity's prefix
     if leg_commodity != default_commodity:
         cfg      = load_spreads_config()
         leg_info = get_commodity_info(cfg, leg_commodity)

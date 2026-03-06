@@ -65,6 +65,7 @@ if st.button("▶️ Run Status Check", type="primary"):
 
         if is_intercmdy:
             # Collect unique source commodities from leg definitions
+            # For continuous legs, use the "commodity" key directly
             source_commodities = list({
                 leg.get("commodity", commodity)
                 for leg in all_legs
@@ -102,25 +103,32 @@ if st.button("▶️ Run Status Check", type="primary"):
 
             for year in season_years:
                 for leg_i, leg in enumerate(spread_def["legs"]):
-                    leg_year      = year + leg.get("year_offset", 0)
                     leg_commodity = leg.get("commodity", commodity)
 
-                    # Use the correct prefix for this leg's commodity
-                    if leg_commodity != commodity:
-                        leg_cfg    = get_commodity_info(config, leg_commodity)
-                        leg_prefix = leg_cfg.get("prophetx_prefix", "") if leg_cfg else ""
+                    # ── Continuous/index leg ──────────────────────────────
+                    if leg.get("type") == "continuous":
+                        symbol   = leg["symbol"]
+                        leg_data = multi_data.get(leg_commodity, {})
+                        series   = leg_data.get(symbol)
+                        label    = f"Index ({leg_commodity})"
                     else:
-                        leg_prefix = prefix
-
-                    symbol       = build_prophetx_symbol(leg_prefix, leg["month"], leg_year)
-                    leg_data     = multi_data.get(leg_commodity, {})
-                    series       = leg_data.get(symbol)
+                        # ── Standard contract leg ─────────────────────────
+                        leg_year  = year + leg.get("year_offset", 0)
+                        if leg_commodity != commodity:
+                            leg_cfg    = get_commodity_info(config, leg_commodity)
+                            leg_prefix = leg_cfg.get("prophetx_prefix", "") if leg_cfg else ""
+                        else:
+                            leg_prefix = prefix
+                        symbol   = build_prophetx_symbol(leg_prefix, leg["month"], leg_year)
+                        leg_data = multi_data.get(leg_commodity, {})
+                        series   = leg_data.get(symbol)
+                        label    = f"Leg {leg_i + 1} ({leg_commodity})"
 
                     if series is not None:
                         date_range = f"{series.index[0].date()} → {series.index[-1].date()}"
                         rows.append({
-                            "Season Year": year,
-                            "Leg":         f"Leg {leg_i + 1} ({leg_commodity})",
+                            "Season Year": year if leg.get("type") != "continuous" else "—",
+                            "Leg":         label,
                             "Symbol":      symbol,
                             "Status":      "✅ OK",
                             "Days":        len(series),
@@ -128,12 +136,12 @@ if st.button("▶️ Run Status Check", type="primary"):
                         })
                     else:
                         rows.append({
-                            "Season Year": year,
-                            "Leg":         f"Leg {leg_i + 1} ({leg_commodity})",
+                            "Season Year": year if leg.get("type") != "continuous" else "—",
+                            "Leg":         label,
                             "Symbol":      symbol,
                             "Status":      "❌ MISSING",
                             "Days":        0,
-                            "Date Range":  f"Add {symbol} column to {leg_commodity.lower()}.xlsx",
+                            "Date Range":  f"Add {symbol} column to the index Excel file",
                         })
 
             df = pd.DataFrame(rows)

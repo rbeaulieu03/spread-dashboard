@@ -288,3 +288,63 @@ commodities:
         legs:
           - {month: "Z", year_offset: 0, commodity: "Wheat"}
           - {month: "Z", year_offset: 0, commodity: "Corn"}
+
+  LeanHogIndex:
+    unit: "cents/lb"
+    prophetx_prefix: null
+    spreads:
+      - id: "HEI_G"
+        name: "Feb Futures vs Index"
+        window: {start_mmdd: "08-15", end_mmdd: "02-13"}
+        legs:
+          - {month: "G", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_J"
+        name: "Apr Futures vs Index"
+        window: {start_mmdd: "10-15", end_mmdd: "04-13"}
+        legs:
+          - {month: "J", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_K"
+        name: "May Futures vs Index"
+        window: {start_mmdd: "11-15", end_mmdd: "05-13"}
+        legs:
+          - {month: "K", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_M"
+        name: "Jun Futures vs Index"
+        window: {start_mmdd: "12-15", end_mmdd: "06-13"}
+        legs:
+          - {month: "M", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_N"
+        name: "Jul Futures vs Index"
+        window: {start_mmdd: "01-15", end_mmdd: "07-13"}
+        legs:
+          - {month: "N", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_Q"
+        name: "Aug Futures vs Index"
+        window: {start_mmdd: "02-15", end_mmdd: "08-13"}
+        legs:
+          - {month: "Q", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_V"
+        name: "Oct Futures vs Index"
+        window: {start_mmdd: "04-15", end_mmdd: "10-13"}
+        legs:
+          - {month: "V", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
+
+      - id: "HEI_Z"
+        name: "Dec Futures vs Index"
+        window: {start_mmdd: "06-15", end_mmdd: "12-13"}
+        legs:
+          - {month: "Z", year_offset: 0, commodity: "LeanHogs"}
+          - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
