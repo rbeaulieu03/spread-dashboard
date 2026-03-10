@@ -1,19 +1,15 @@
 """
-3_COT_Dashboard.py
-------------------
-CFTC Disaggregated Commitments of Traders dashboard.
+4_Data_Status.py
+----------------
+Unified data status and diagnostics page covering all three data sources:
 
-Three tabs:
-  📊 Snapshot    — Cross-commodity positioning table with percentile ranks.
-                   The landing view: one row per commodity, flagging extremes.
-  📈 Deep Dive   — Single-commodity dual-axis chart (price + MM net position)
-                   plus gross long/short breakdown and commercial positioning.
-  🔄 Flow Monitor — Week-over-week flow ranking across all commodities,
-                    highlighting largest position changes and zero-crossings.
+  1. ProphetX Excel   — per-commodity contract files in data/prophetx/
+  2. Bloomberg Excel  — implied volatility files in data/bloomberg/
+  3. CFTC COT         — auto-fetched from CFTC public website
 
-Data is fetched automatically from the CFTC public website — no manual
-Excel export required. Cache refreshes every 6 hours (well ahead of the
-Friday 3:30 PM ET release).
+Run this page any time a chart shows no data or unexpected gaps.
+Each section tells you exactly what is loaded, what is missing,
+and what to do to fix it.
 """
 
 import sys
@@ -23,825 +19,459 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import date
 
-from src.providers.cot import (
-    fetch_cot_data,
-    get_commodity_timeseries,
-    get_snapshot,
-    fetch_continuous_price,
-    COT_COMMODITIES,
-)
+from src.config            import load_spreads_config, get_commodity_names, get_commodity_info, get_spreads_for_commodity
+from src.providers.excel   import load_commodity_file, build_prophetx_symbol
+from src.providers.iv      import load_iv_data, get_iv_commodities, get_iv_label
+from src.providers.cot     import fetch_cot_data, get_commodity_timeseries, COT_COMMODITIES
 
 # ── Page setup ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title = "COT Dashboard",
-    page_icon  = "🌾",
+    page_title = "Data Status",
+    page_icon  = "🔎",
     layout     = "wide",
 )
 
-# ── Dark theme constants (matches existing pages) ─────────────────────────────
-_BG          = "#000000"
-_PLOT_BG     = "#000000"
-_GRID        = "#1A1A1A"
-_LINE        = "#333333"
-_FONT_COLOR  = "#BBBBBB"
-_TICK_COLOR  = "#AAAAAA"
-_LEGEND_BG   = "rgba(0,0,0,0.75)"
-_HOVER_BG    = "rgba(0,0,0,0.85)"
-
-_MM_COLOR    = "#00FFFF"    # cyan — managed money (matches highlight_year convention)
-_PROD_COLOR  = "#FF8C00"    # orange — commercial/producer
-_PRICE_COLOR = "#FFFFFF"    # white — price line
-_LONG_COLOR  = "#4CAF7D"    # green — gross longs
-_SHORT_COLOR = "#DC143C"    # red   — gross shorts
-
-_LAYOUT_BASE = dict(
-    paper_bgcolor = _BG,
-    plot_bgcolor  = _PLOT_BG,
-    font          = dict(color=_FONT_COLOR, size=11, family="Arial"),
-    legend        = dict(
-        x=1.01, y=1.0, xanchor="left", yanchor="top",
-        bgcolor=_LEGEND_BG, bordercolor=_LINE, borderwidth=1,
-        font=dict(size=12, color="#CCCCCC"),
-    ),
-    hoverlabel = dict(bgcolor=_HOVER_BG, bordercolor="#444444", font=dict(size=11, color="#FFFFFF")),
+st.title("🔎 Data Status & Diagnostics")
+st.markdown(
+    "Check the health of every data source powering the dashboard. "
+    "Expand each section for full detail. "
+    "**Green = OK · Red = action required · Yellow = partial / warning.**"
 )
-
-def _axis(title_text: str, is_secondary: bool = False, tick_suffix: str = "") -> dict:
-    """Shared axis styling helper."""
-    return dict(
-        title     = dict(text=title_text, font=dict(size=13, color=_TICK_COLOR)),
-        tickfont  = dict(size=11, color=_TICK_COLOR),
-        ticksuffix = tick_suffix,
-        gridcolor = _GRID,
-        gridwidth = 1,
-        linecolor = _LINE,
-        showline  = True,
-        zeroline  = True,
-        zerolinecolor = "#2A2A2A",
-        zerolinewidth = 1.5,
-    )
-
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.header("Controls")
-    st.divider()
-
-    lookback_years = st.selectbox(
-        "Data Lookback",
-        options = [3, 5, 7],
-        index   = 1,
-        format_func = lambda x: f"{x} years",
-        help    = "How many years of COT history to download.",
-    )
-
-    pct_window = st.selectbox(
-        "Percentile Window",
-        options = [1, 3, 5],
-        index   = 1,
-        format_func = lambda x: f"{x} yr rolling",
-        help    = "Lookback window used to compute the MM positioning percentile rank.",
-    )
-
-    categories = ["All"] + sorted({v["category"] for v in COT_COMMODITIES.values()})
-    cat_filter = st.selectbox("Category Filter", options=categories)
-
-    st.divider()
-    st.caption("Source: CFTC Disaggregated Futures-Only Report")
-    st.caption("Released: Fridays 3:30 PM ET (as of prior Tuesday)")
-    st.caption("Auto-refreshes every 6 hours — no manual export needed.")
-
-
-# ── Load COT data ─────────────────────────────────────────────────────────────
-with st.spinner("Fetching CFTC COT data…"):
-    cot_df, cot_status = fetch_cot_data(lookback_years=lookback_years)
-
-st.title("🌾 COT Dashboard — Disaggregated Futures")
-
-if cot_df.empty:
-    st.error(f"Could not load COT data. Detail: {cot_status}")
-    st.stop()
-
-# Most recent report date across all commodities
-latest_date = cot_df["Report_Date_as_YYYY-MM-DD"].max()
-st.caption(f"**Data as of: {latest_date.strftime('%A, %B %d, %Y')}**  (CFTC Tuesday snapshot)")
 st.divider()
 
-# ── Apply category filter ─────────────────────────────────────────────────────
-filtered_keys = [
-    k for k, v in COT_COMMODITIES.items()
-    if cat_filter == "All" or v["category"] == cat_filter
-]
+# ── Shared helpers ─────────────────────────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def load_config():
+    return load_spreads_config()
+
+def _fmt_int(v):
+    return f"{int(v):,}" if pd.notna(v) else "—"
+
+def _color_status(row):
+    s = row.get("Status", "")
+    if "✅" in str(s):
+        return ["background-color: #0d2b0d"] * len(row)
+    if "❌" in str(s):
+        return ["background-color: #2b0d0d"] * len(row)
+    if "⚠️" in str(s):
+        return ["background-color: #2b2200"] * len(row)
+    return [""] * len(row)
+
+current_year = date.today().year
+season_years = list(range(current_year - 5, current_year + 1))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TABS
+# SECTION 1 — ProphetX Excel
 # ══════════════════════════════════════════════════════════════════════════════
-tab_snap, tab_deep, tab_flow, tab_scatter = st.tabs(["📊 Snapshot", "📈 Deep Dive", "🔄 Flow Monitor", "🔵 Trader Positioning"])
+with st.expander("📂 ProphetX Excel Files  —  Spread Seasonality Data", expanded=True):
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — SNAPSHOT
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_snap:
-    st.subheader("Cross-Commodity Positioning Snapshot")
     st.markdown(
-        "Managed Money net positioning for each commodity. "
-        "**Percentile** is computed over a rolling window vs. the selected lookback. "
-        "🟢 ≥ 90th or 🔴 ≤ 10th percentile flags positioning extremes."
+        "Checks every `data/prophetx/*.xlsx` file and confirms that each "
+        "contract symbol column required by `spreads.yaml` is present."
     )
 
-    snap_df = get_snapshot(cot_df, pct_window_yrs=pct_window)
+    config      = load_config()
+    commodities = get_commodity_names(config)
 
-    if snap_df.empty:
-        st.warning("No snapshot data available. Check the troubleshoot expander below.")
-    else:
-        # Filter by category
-        snap_filtered = snap_df[snap_df["Commodity"].isin(
-            [COT_COMMODITIES[k]["display"] for k in filtered_keys]
-        )].copy()
+    px_filter = st.selectbox(
+        "Filter by Commodity",
+        options = ["All"] + commodities,
+        key     = "px_filter",
+    )
+    check_list = commodities if px_filter == "All" else [px_filter]
 
-        # ── Metric row: extremes count ────────────────────────────────────
-        n_extreme_long  = (snap_filtered["MM_Percentile"] >= 90).sum()
-        n_extreme_short = (snap_filtered["MM_Percentile"] <= 10).sum()
-        n_total         = len(snap_filtered)
+    if st.button("▶️ Run ProphetX Check", type="primary", key="run_px"):
+        for commodity in check_list:
+            comm_info = get_commodity_info(config, commodity)
+            spreads   = get_spreads_for_commodity(config, commodity)
+            prefix    = comm_info.get("prophetx_prefix", "")
 
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Commodities Shown", n_total)
-        m2.metric("Extreme Long (≥90th)", int(n_extreme_long),
-                  help="Historically high MM net long — potential contrarian sell signal.")
-        m3.metric("Extreme Short (≤10th)", int(n_extreme_short),
-                  help="Historically low MM net long — potential contrarian buy signal.")
-        m4.metric("Percentile Window", f"{pct_window} yr")
+            st.subheader(commodity)
 
-        st.divider()
+            all_legs     = [leg for s in spreads for leg in s["legs"]]
+            is_intercmdy = any("commodity" in leg for leg in all_legs)
 
-        # ── Style the snapshot table ──────────────────────────────────────
-        display_cols = {
-            "Commodity":     "Commodity",
-            "Category":      "Category",
-            "As_Of":         "As Of",
-            "MM_Net":        "MM Net (contracts)",
-            "MM_Net_WoW":    "WoW Change",
-            "MM_Pct_OI":     "MM % of OI",
-            "MM_Percentile": f"Percentile ({pct_window}yr)",
-            "Prod_Net":      "Commercial Net",
-            "Open_Interest": "Open Interest",
-        }
-        table = snap_filtered[list(display_cols.keys())].rename(columns=display_cols).copy()
-
-        def _color_row(row):
-            pct = row.get(f"Percentile ({pct_window}yr)", None)
-            if pct is None:
-                return [""] * len(row)
-            if pct >= 90:
-                bg = "background-color: #0d2b0d"    # deep green — extreme long
-            elif pct >= 75:
-                bg = "background-color: #0a200a"    # light green tint
-            elif pct <= 10:
-                bg = "background-color: #2b0d0d"    # deep red — extreme short
-            elif pct <= 25:
-                bg = "background-color: #200a0a"    # light red tint
+            if is_intercmdy:
+                source_commodities = list({leg.get("commodity", commodity) for leg in all_legs})
+                all_ok   = True
+                multi_data = {}
+                for src in sorted(source_commodities):
+                    src_data, src_msg = load_commodity_file(src)
+                    if src_data:
+                        st.success(f"✅ {src_msg}")
+                    else:
+                        st.error(f"❌ {src_msg}")
+                        all_ok = False
+                    multi_data[src] = src_data
+                if not all_ok:
+                    st.divider()
+                    continue
             else:
-                bg = ""
-            return [bg] * len(row)
+                contract_data, load_msg = load_commodity_file(commodity)
+                if not contract_data:
+                    st.error(f"❌ {load_msg}")
+                    st.divider()
+                    continue
+                st.success(f"✅ {load_msg}")
+                multi_data = {commodity: contract_data}
 
-        def _fmt_int(val):
-            if val is None or (isinstance(val, float) and np.isnan(val)):
-                return "—"
-            return f"{int(val):,}"
+            # Check each spread leg for each season year
+            for spread_def in spreads:
+                st.markdown(f"**{spread_def['name']}**")
+                rows = []
 
-        def _fmt_pct(val):
-            if val is None or (isinstance(val, float) and np.isnan(val)):
-                return "—"
-            return f"{val:.1f}%"
+                for year in season_years:
+                    for leg_i, leg in enumerate(spread_def["legs"]):
+                        leg_commodity = leg.get("commodity", commodity)
 
-        formatters = {
-            "MM Net (contracts)":       _fmt_int,
-            "WoW Change":               _fmt_int,
-            f"Percentile ({pct_window}yr)": lambda v: f"{int(v)}th" if pd.notna(v) else "—",
-            "MM % of OI":               _fmt_pct,
-            "Commercial Net":           _fmt_int,
-            "Open Interest":            _fmt_int,
-        }
+                        if leg.get("type") == "continuous":
+                            symbol   = leg["symbol"]
+                            leg_data = multi_data.get(leg_commodity, {})
+                            series   = leg_data.get(symbol)
+                            label    = f"Index ({leg_commodity})"
+                            yr_label = "—"
+                        else:
+                            leg_year  = year + leg.get("year_offset", 0)
+                            if leg_commodity != commodity:
+                                leg_cfg    = get_commodity_info(config, leg_commodity)
+                                leg_prefix = leg_cfg.get("prophetx_prefix", "") if leg_cfg else ""
+                            else:
+                                leg_prefix = prefix
+                            symbol   = build_prophetx_symbol(leg_prefix, leg["month"], leg_year)
+                            leg_data = multi_data.get(leg_commodity, {})
+                            series   = leg_data.get(symbol)
+                            label    = f"Leg {leg_i + 1} ({leg_commodity})"
+                            yr_label = str(year)
 
-        styled = table.style.apply(_color_row, axis=1).format(formatters, na_rep="—")
+                        if series is not None:
+                            date_range = f"{series.index[0].date()} → {series.index[-1].date()}"
+                            rows.append({
+                                "Season Year": yr_label,
+                                "Leg":         label,
+                                "Symbol":      symbol,
+                                "Status":      "✅ OK",
+                                "Days":        len(series),
+                                "Date Range":  date_range,
+                            })
+                        else:
+                            rows.append({
+                                "Season Year": yr_label,
+                                "Leg":         label,
+                                "Symbol":      symbol,
+                                "Status":      "❌ MISSING",
+                                "Days":        0,
+                                "Date Range":  f"Add {symbol} column to the Excel file",
+                            })
 
-        st.dataframe(styled, use_container_width=True, hide_index=True, height=420)
-
-        # ── Legend ────────────────────────────────────────────────────────
-        st.caption(
-            "🟢 ≥90th percentile = historically extreme long positioning "
-            "| 🔴 ≤10th = historically extreme short "
-            "| WoW Change = contracts bought/sold vs prior week"
-        )
-
-        st.divider()
-        st.download_button(
-            label     = "⬇️ Download Snapshot as CSV",
-            data      = table.to_csv(index=False),
-            file_name = f"cot_snapshot_{latest_date.date()}.csv",
-            mime      = "text/csv",
-        )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — DEEP DIVE
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_deep:
-    st.subheader("Single-Commodity Deep Dive")
-
-    dd_col1, dd_col2, dd_col3 = st.columns([2, 1, 1])
-    with dd_col1:
-        dd_commodity = st.selectbox(
-            "Commodity",
-            options = filtered_keys,
-            format_func = lambda k: COT_COMMODITIES[k]["display"],
-            key = "dd_commodity",
-        )
-    with dd_col2:
-        dd_lookback = st.selectbox(
-            "Chart Lookback",
-            options = [1, 2, 3, 5],
-            index   = 1,
-            format_func = lambda x: f"{x} year{'s' if x > 1 else ''}",
-            key = "dd_lookback",
-        )
-    with dd_col3:
-        show_price   = st.toggle("Show Price Overlay", value=True, key="dd_price")
-        show_commercial = st.toggle("Show Commercial", value=True, key="dd_comm")
-
-    meta = COT_COMMODITIES[dd_commodity]
-    ts   = get_commodity_timeseries(cot_df, dd_commodity, pct_window)
-
-    if ts.empty:
-        st.warning(f"No COT time series data for {meta['display']}.")
-    else:
-        # Trim to lookback window
-        cutoff = pd.Timestamp(date.today()) - pd.DateOffset(years=dd_lookback)
-        ts_plot = ts[ts.index >= cutoff]
-
-        # ── Quick stats (most recent week) ────────────────────────────────
-        latest   = ts.iloc[-1]
-        s1, s2, s3, s4 = st.columns(4)
-        s1.metric(
-            f"MM Net  ({ts.index[-1].strftime('%b %d')})",
-            f"{int(latest['MM_Net']):,}" if pd.notna(latest.get('MM_Net')) else "—",
-        )
-        s2.metric(
-            "WoW Change",
-            f"{int(latest['MM_Net_WoW']):+,}" if pd.notna(latest.get('MM_Net_WoW')) else "—",
-        )
-        s3.metric(
-            f"Percentile ({pct_window}yr)",
-            f"{int(latest['MM_Percentile'])}th" if pd.notna(latest.get('MM_Percentile')) else "—",
-            help="Where current MM net positioning sits vs the rolling lookback window.",
-        )
-        s4.metric(
-            "MM % of OI",
-            f"{latest['MM_Pct_OI']:.1f}%" if pd.notna(latest.get('MM_Pct_OI')) else "—",
-        )
-
-        # ── Chart 1: Price + MM Net Position ─────────────────────────────
-        st.markdown(f"##### {meta['display']} — Price vs. Managed Money Net Position")
-
-        n_rows = 2 if show_commercial else 1
-        row_heights = [0.6, 0.4] if show_commercial else [1.0]
-
-        if show_price:
-            price_series, price_status = fetch_continuous_price(meta["yahoo_continuous"])
-            price_plot = price_series[price_series.index >= cutoff] if not price_series.empty else pd.Series(dtype=float)
-        else:
-            price_plot   = pd.Series(dtype=float)
-            price_status = "Price overlay disabled."
-
-        specs = [[{"secondary_y": show_price}]] + ([[{"secondary_y": False}]] if show_commercial else [])
-        fig1  = make_subplots(
-            rows=n_rows, cols=1,
-            shared_xaxes = True,
-            row_heights  = row_heights,
-            specs        = specs,
-            vertical_spacing = 0.06,
-        )
-
-        # MM Net position bars
-        mm_net = ts_plot["MM_Net"].dropna()
-        bar_colors = [_LONG_COLOR if v >= 0 else _SHORT_COLOR for v in mm_net.values]
-        fig1.add_trace(
-            go.Bar(
-                x    = mm_net.index,
-                y    = mm_net.values,
-                name = "MM Net Position",
-                marker_color  = bar_colors,
-                opacity       = 0.75,
-                hovertemplate = "<b>MM Net</b>: %{y:,.0f}<extra></extra>",
-            ),
-            row=1, col=1, secondary_y=False,
-        )
-
-        # Price overlay (right axis)
-        if show_price and not price_plot.empty:
-            fig1.add_trace(
-                go.Scatter(
-                    x    = price_plot.index,
-                    y    = price_plot.values,
-                    name = f"{meta['display']} Price ({meta['unit']})",
-                    mode = "lines",
-                    line = dict(color=_PRICE_COLOR, width=1.5),
-                    hovertemplate = "<b>Price</b>: %{y:.2f}<extra></extra>",
-                ),
-                row=1, col=1, secondary_y=True,
-            )
-
-        # Commercial net position (row 2 if enabled)
-        if show_commercial and n_rows == 2:
-            prod_net   = ts_plot["Prod_Net"].dropna()
-            prod_colors = [_SHORT_COLOR if v >= 0 else _LONG_COLOR for v in prod_net.values]
-            # Commercials are structurally net short; green = less short than usual
-            fig1.add_trace(
-                go.Bar(
-                    x    = prod_net.index,
-                    y    = prod_net.values,
-                    name = "Commercial Net",
-                    marker_color  = prod_colors,
-                    opacity       = 0.75,
-                    hovertemplate = "<b>Commercial Net</b>: %{y:,.0f}<extra></extra>",
-                ),
-                row=2, col=1,
-            )
-
-        # Layout
-        fig1.update_layout(
-            **_LAYOUT_BASE,
-            hovermode   = "x unified",
-            height      = 560 if show_commercial else 420,
-            margin      = dict(l=70, r=150, t=55, b=70),
-            barmode     = "relative",
-            showlegend  = True,
-            title       = dict(
-                text = f"{meta['display']} — Managed Money Positioning",
-                font = dict(size=14, color="#FFFFFF", family="Arial"),
-                x=0.5, y=0.98,
-            ),
-        )
-        fig1.update_xaxes(gridcolor=_GRID, linecolor=_LINE, tickfont=dict(color=_TICK_COLOR))
-        fig1.update_yaxes(
-            title_text    = "Net Contracts",
-            title_font    = dict(size=12, color=_TICK_COLOR),
-            tickfont      = dict(size=11, color=_TICK_COLOR),
-            gridcolor     = _GRID,
-            linecolor     = _LINE,
-            zerolinecolor = "#2A2A2A",
-            secondary_y   = False,
-            row=1, col=1,
-        )
-        if show_price:
-            fig1.update_yaxes(
-                title_text  = f"Price ({meta['unit']})",
-                title_font  = dict(size=12, color=_TICK_COLOR),
-                tickfont    = dict(size=11, color=_TICK_COLOR),
-                gridcolor   = "rgba(0,0,0,0)",
-                showgrid    = False,
-                secondary_y = True,
-                row=1, col=1,
-            )
-        if show_commercial and n_rows == 2:
-            fig1.update_yaxes(
-                title_text  = "Commercial Net",
-                title_font  = dict(size=12, color=_TICK_COLOR),
-                tickfont    = dict(size=11, color=_TICK_COLOR),
-                gridcolor   = _GRID,
-                linecolor   = _LINE,
-                zerolinecolor = "#2A2A2A",
-                row=2, col=1,
-            )
-
-        st.plotly_chart(fig1, use_container_width=True)
-
-        # ── Chart 2: Gross Longs vs. Shorts ───────────────────────────────
-        st.markdown(f"##### {meta['display']} — MM Gross Longs vs. Shorts")
-        st.caption(
-            "Net position can be misleading when both sides grow simultaneously "
-            "(crowded two-way book). Gross view reveals that dynamic."
-        )
-
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(
-            x    = ts_plot.index,
-            y    = ts_plot["MM_Long"].values,
-            name = "MM Gross Longs",
-            mode = "lines",
-            line = dict(color=_LONG_COLOR, width=1.8),
-            fill = "tozeroy",
-            fillcolor = "rgba(76,175,125,0.15)",
-            hovertemplate = "<b>MM Longs</b>: %{y:,.0f}<extra></extra>",
-        ))
-        fig2.add_trace(go.Scatter(
-            x    = ts_plot.index,
-            y    = ts_plot["MM_Short"].values,
-            name = "MM Gross Shorts",
-            mode = "lines",
-            line = dict(color=_SHORT_COLOR, width=1.8),
-            fill = "tozeroy",
-            fillcolor = "rgba(220,20,60,0.15)",
-            hovertemplate = "<b>MM Shorts</b>: %{y:,.0f}<extra></extra>",
-        ))
-        fig2.update_layout(
-            **_LAYOUT_BASE,
-            hovermode = "x unified",
-            height = 420,
-            margin = dict(l=70, r=150, t=55, b=70),
-            title = dict(
-                text = f"{meta['display']} — Managed Money Gross Positions",
-                font = dict(size=14, color="#FFFFFF", family="Arial"),
-                x=0.5, y=0.98,
-            ),
-            yaxis = dict(**_axis("Contracts (gross)")),
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-
-        # ── Download ──────────────────────────────────────────────────────
-        st.divider()
-        st.download_button(
-            label     = f"⬇️ Download {meta['display']} COT history as CSV",
-            data      = ts.to_csv(),
-            file_name = f"cot_{dd_commodity.replace(' ','_').lower()}_{date.today()}.csv",
-            mime      = "text/csv",
-        )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — FLOW MONITOR
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_flow:
-    st.subheader("Week-over-Week Flow Monitor")
-    st.markdown(
-        "Ranked by the **magnitude of change** in Managed Money net position "
-        "from last week's report. Flags zero-crossings (net long ↔ short flips)."
-    )
-
-    # Build flow table
-    flow_rows = []
-    for key in filtered_keys:
-        meta = COT_COMMODITIES[key]
-        ts   = get_commodity_timeseries(cot_df, key, pct_window)
-        if ts.empty or "MM_Net_WoW" not in ts.columns:
-            continue
-
-        last     = ts.iloc[-1]
-        prev     = ts.iloc[-2] if len(ts) >= 2 else None
-
-        wow      = last.get("MM_Net_WoW", np.nan)
-        mm_net   = last.get("MM_Net",    np.nan)
-        mm_prev  = prev["MM_Net"] if prev is not None else np.nan
-
-        # Detect zero crossing
-        crossed = (
-            pd.notna(mm_net) and pd.notna(mm_prev) and
-            ((mm_prev >= 0 and mm_net < 0) or (mm_prev < 0 and mm_net >= 0))
-        )
-
-        flow_rows.append({
-            "Commodity":    meta["display"],
-            "Category":     meta["category"],
-            "As_Of":        ts.index[-1].date(),
-            "MM_Net":       int(mm_net)   if pd.notna(mm_net) else None,
-            "MM_Net_WoW":   int(wow)      if pd.notna(wow)    else None,
-            "MM_Abs_WoW":   abs(wow)      if pd.notna(wow)    else 0,
-            "MM_Percentile":int(last["MM_Percentile"]) if pd.notna(last.get("MM_Percentile")) else None,
-            "Zero_Cross":   "⚡ FLIP" if crossed else "",
-        })
-
-    if not flow_rows:
-        st.warning("No flow data available.")
-    else:
-        flow_df = pd.DataFrame(flow_rows).sort_values("MM_Abs_WoW", ascending=False)
-
-        # Display columns
-        flow_display = flow_df[[
-            "Commodity", "Category", "As_Of",
-            "MM_Net", "MM_Net_WoW", "MM_Percentile", "Zero_Cross"
-        ]].rename(columns={
-            "MM_Net":        "MM Net",
-            "MM_Net_WoW":    "WoW Change",
-            "MM_Percentile": f"Percentile ({pct_window}yr)",
-            "Zero_Cross":    "Signal",
-        })
-
-        def _color_flow(row):
-            wow = row.get("WoW Change", None)
-            if wow is None or (isinstance(wow, float) and np.isnan(wow)):
-                return [""] * len(row)
-            if wow >= 20_000:
-                bg = "background-color: #0d2b0d"
-            elif wow >= 10_000:
-                bg = "background-color: #0a1a0a"
-            elif wow <= -20_000:
-                bg = "background-color: #2b0d0d"
-            elif wow <= -10_000:
-                bg = "background-color: #1a0a0a"
-            else:
-                bg = ""
-            return [bg] * len(row)
-
-        def _fmt_wow(val):
-            if val is None or (isinstance(val, float) and np.isnan(val)):
-                return "—"
-            return f"{int(val):+,}"
-
-        styled_flow = flow_display.style.apply(_color_flow, axis=1).format(
-            {
-                "MM Net":    lambda v: f"{int(v):,}" if pd.notna(v) else "—",
-                "WoW Change": _fmt_wow,
-                f"Percentile ({pct_window}yr)": lambda v: f"{int(v)}th" if pd.notna(v) else "—",
-            },
-            na_rep="—",
-        )
-
-        st.dataframe(styled_flow, use_container_width=True, hide_index=True, height=420)
-
-        st.caption(
-            "🟢 Large buying (≥20k contracts)  |  🔴 Large selling (≥20k contracts)  "
-            "|  ⚡ FLIP = MM crossed from net long to short or vice versa"
-        )
-
-        # ── WoW bar chart ─────────────────────────────────────────────────
-        st.markdown("##### WoW Change — Visual Ranking")
-
-        chart_df = flow_df.dropna(subset=["MM_Net_WoW"]).sort_values("MM_Net_WoW")
-        bar_cols  = [_LONG_COLOR if v >= 0 else _SHORT_COLOR for v in chart_df["MM_Net_WoW"]]
-
-        fig_flow = go.Figure(go.Bar(
-            x             = chart_df["MM_Net_WoW"].values,
-            y             = chart_df["Commodity"].values,
-            orientation   = "h",
-            marker_color  = bar_cols,
-            opacity       = 0.85,
-            hovertemplate = "<b>%{y}</b>: %{x:+,.0f} contracts<extra></extra>",
-        ))
-        fig_flow.update_layout(
-            **_LAYOUT_BASE,
-            hovermode = "closest",
-            height = max(300, len(chart_df) * 42),
-            margin = dict(l=130, r=60, t=40, b=50),
-            title  = dict(
-                text = f"Week-over-Week Change in MM Net Position ({latest_date.strftime('%b %d, %Y')})",
-                font = dict(size=13, color="#FFFFFF", family="Arial"),
-                x=0.5,
-            ),
-            xaxis = dict(
-                title    = dict(text="Contracts", font=dict(size=12, color=_TICK_COLOR)),
-                tickfont = dict(size=11, color=_TICK_COLOR),
-                gridcolor = _GRID,
-                linecolor = _LINE,
-                zeroline  = True,
-                zerolinecolor = "#444444",
-            ),
-            yaxis = dict(
-                tickfont = dict(size=12, color="#DDDDDD"),
-                gridcolor = _GRID,
-            ),
-            showlegend = False,
-        )
-        st.plotly_chart(fig_flow, use_container_width=True)
-
-        st.divider()
-        st.download_button(
-            label     = "⬇️ Download Flow Monitor as CSV",
-            data      = flow_display.to_csv(index=False),
-            file_name = f"cot_flow_{latest_date.date()}.csv",
-            mime      = "text/csv",
-        )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 4 — TRADER POSITIONING SCATTER
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_scatter:
-    st.subheader("Trader Positioning — Number of Traders vs. Net Position")
-    st.markdown(
-        "Each dot is one weekly COT report. "
-        "**X-axis** = Managed Money net position (thousands of contracts). "
-        "**Y-axis** = number of MM traders (long + short). "
-        "Color runs from **oldest** (dark) → **newest** (cyan), so you can "
-        "see how the market has migrated over time."
-    )
-
-    sc_col1, sc_col2, sc_col3 = st.columns([2, 1, 1])
-    with sc_col1:
-        sc_commodity = st.selectbox(
-            "Commodity",
-            options      = filtered_keys,
-            format_func  = lambda k: COT_COMMODITIES[k]["display"],
-            key          = "sc_commodity",
-        )
-    with sc_col2:
-        sc_lookback = st.selectbox(
-            "Lookback",
-            options      = [1, 2, 3, 5],
-            index        = 2,
-            format_func  = lambda x: f"{x} year{'s' if x > 1 else ''}",
-            key          = "sc_lookback",
-        )
-    with sc_col3:
-        trader_view = st.selectbox(
-            "Traders (Y-axis)",
-            options = ["Total (Long + Short)", "Long Only", "Short Only"],
-            key     = "sc_trader_view",
-        )
-
-    sc_meta = COT_COMMODITIES[sc_commodity]
-    sc_ts   = get_commodity_timeseries(cot_df, sc_commodity, pct_window)
-
-    if sc_ts.empty:
-        st.warning(f"No COT time series data for {sc_meta['display']}.")
-    else:
-        # Trim to lookback window
-        sc_cutoff = pd.Timestamp(date.today()) - pd.DateOffset(years=sc_lookback)
-        sc_plot   = sc_ts[sc_ts.index >= sc_cutoff].copy()
-
-        # Pick Y column based on toggle
-        y_col  = {"Total (Long + Short)": "Traders_MM_Total",
-                   "Long Only":            "Traders_MM_Long",
-                   "Short Only":           "Traders_MM_Short"}[trader_view]
-        y_label = {"Total (Long + Short)": "Total MM Traders (Long + Short)",
-                   "Long Only":            "MM Long Traders",
-                   "Short Only":           "MM Short Traders"}[trader_view]
-
-        sc_clean = sc_plot[["MM_Net", y_col]].dropna()
-
-        if sc_clean.empty:
-            st.warning("Not enough data to plot. Trader count columns may be missing from the CFTC file for this date range.")
-        else:
-            x_vals     = (sc_clean["MM_Net"] / 1000).values          # → thousands
-            y_vals     = sc_clean[y_col].values
-            dates      = sc_clean.index
-
-            # Map dates to 0–1 for colorscale
-            date_num   = (dates - dates.min()).days.astype(float)
-            date_norm  = date_num / date_num.max() if date_num.max() > 0 else date_num
-
-            # Hover text
-            hover_text = [
-                f"<b>{d.strftime('%b %d, %Y')}</b><br>"
-                f"MM Net: {x:+.1f}k contracts<br>"
-                f"{y_label}: {int(y)}"
-                for d, x, y in zip(dates, x_vals, y_vals)
-            ]
-
-            # Most recent point highlighted separately
-            latest_x = x_vals[-1]
-            latest_y = y_vals[-1]
-            latest_d = dates[-1]
-
-            fig_sc = go.Figure()
-
-            # Main scatter — all points except the latest
-            fig_sc.add_trace(go.Scatter(
-                x          = x_vals[:-1],
-                y          = y_vals[:-1],
-                mode       = "markers",
-                name       = "Historical",
-                text       = hover_text[:-1],
-                hovertemplate = "%{text}<extra></extra>",
-                marker     = dict(
-                    size        = 7,
-                    color       = date_norm[:-1],
-                    colorscale  = [
-                        [0.0,  "#1a3a1a"],   # darkest green — oldest
-                        [0.4,  "#4169E1"],   # royal blue
-                        [0.7,  "#9370DB"],   # purple
-                        [0.85, "#FF8C00"],   # orange
-                        [1.0,  "#00FFFF"],   # cyan — newest
-                    ],
-                    showscale   = True,
-                    colorbar    = dict(
-                        title      = dict(text="Older → Newer", font=dict(color=_TICK_COLOR, size=11)),
-                        tickvals   = [0, 1],
-                        ticktext   = [dates.min().strftime("%b '%y"), dates.max().strftime("%b '%y")],
-                        tickfont   = dict(color=_TICK_COLOR, size=10),
-                        outlinecolor = _LINE,
-                        thickness  = 14,
-                        len        = 0.6,
-                    ),
-                    opacity     = 0.85,
-                    line        = dict(width=0),
-                ),
-            ))
-
-            # Latest point — bright cyan star
-            fig_sc.add_trace(go.Scatter(
-                x          = [latest_x],
-                y          = [latest_y],
-                mode       = "markers+text",
-                name       = f"Latest ({latest_d.strftime('%b %d, %Y')})",
-                text       = [f"  {latest_d.strftime('%b %d')}"],
-                textposition = "middle right",
-                textfont   = dict(color="#00FFFF", size=11),
-                hovertemplate = hover_text[-1] + "<extra></extra>",
-                marker     = dict(
-                    size   = 14,
-                    color  = "#00FFFF",
-                    symbol = "star",
-                    line   = dict(color="#FFFFFF", width=1),
-                ),
-            ))
-
-            # Zero-net vertical reference line
-            fig_sc.add_vline(
-                x           = 0,
-                line_width  = 1,
-                line_dash   = "dash",
-                line_color  = "#444444",
-                annotation_text      = "Net Flat",
-                annotation_position  = "top",
-                annotation_font      = dict(color="#666666", size=10),
-            )
-
-            fig_sc.update_layout(
-                **_LAYOUT_BASE,
-                hovermode = "closest",
-                height = 560,
-                margin = dict(l=70, r=160, t=60, b=70),
-                title  = dict(
-                    text = f"{sc_meta['display']} — Traders vs. Net Position ({sc_lookback}yr)",
-                    font = dict(size=14, color="#FFFFFF", family="Arial"),
-                    x=0.5, y=0.98,
-                ),
-                xaxis = dict(
-                    title     = dict(text="MM Net Position (thousands of contracts)", font=dict(size=13, color=_TICK_COLOR)),
-                    tickfont  = dict(size=11, color=_TICK_COLOR),
-                    gridcolor = _GRID,
-                    linecolor = _LINE,
-                    zeroline  = True,
-                    zerolinecolor = "#2A2A2A",
-                    ticksuffix = "k",
-                ),
-                yaxis = dict(
-                    title     = dict(text=y_label, font=dict(size=13, color=_TICK_COLOR)),
-                    tickfont  = dict(size=11, color=_TICK_COLOR),
-                    gridcolor = _GRID,
-                    linecolor = _LINE,
-                    zeroline  = False,
-                ),
-
-            )
-
-            st.plotly_chart(fig_sc, use_container_width=True)
-
-            # ── Quick stats ───────────────────────────────────────────────
-            q1, q2, q3 = st.columns(3)
-            q1.metric(
-                f"Latest Net ({latest_d.strftime('%b %d')})",
-                f"{latest_x:+.1f}k contracts",
-            )
-            q2.metric(
-                f"Latest {y_label.split()[0]} Traders",
-                f"{int(latest_y):,}",
-            )
-            # Show where current # of traders ranks historically (useful context)
-            trader_pct = round((sc_clean[y_col] < latest_y).sum() / len(sc_clean) * 100)
-            q3.metric(
-                "Trader Count Percentile",
-                f"{trader_pct}th",
-                help=f"Where today's trader count ranks vs the {sc_lookback}-year window.",
-            )
+                df = pd.DataFrame(rows)
+                st.dataframe(
+                    df.style.apply(_color_status, axis=1),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
             st.divider()
-            st.download_button(
-                label     = f"⬇️ Download {sc_meta['display']} scatter data as CSV",
-                data      = sc_clean.assign(MM_Net_Thousands=x_vals).to_csv(),
-                file_name = f"cot_scatter_{sc_commodity.replace(' ','_').lower()}_{date.today()}.csv",
-                mime      = "text/csv",
+
+    else:
+        st.info("Click **▶️ Run ProphetX Check** to validate all ProphetX files.")
+
+    with st.container():
+        st.markdown("""
+        **How to fix a ❌ MISSING symbol:**
+        1. Open Excel with the ProphetX Add-In
+        2. Add the missing contract symbol as a new column to your existing pull
+        3. Paste as values, save the file
+        4. Replace the file in `data/prophetx/` and restart the app
+
+        **To add more years of history:** add older contract columns and restart.
+        The app detects new columns automatically.
+        """)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 2 — Bloomberg IV Excel
+# ══════════════════════════════════════════════════════════════════════════════
+with st.expander("📊 Bloomberg Excel Files  —  Implied Volatility Data", expanded=True):
+
+    st.markdown(
+        "Checks every `data/bloomberg/*_iv.xlsx` file configured in "
+        "`src/providers/iv.py`. Validates years found, date coverage, "
+        "and forward-fill gap size."
+    )
+
+    iv_commodities = get_iv_commodities()
+
+    if st.button("▶️ Run Bloomberg IV Check", type="primary", key="run_iv"):
+        summary_rows = []
+
+        for comm in iv_commodities:
+            pivot, status_msg = load_iv_data(comm)
+            label = get_iv_label(comm)
+
+            if pivot.empty:
+                summary_rows.append({
+                    "Commodity":   comm,
+                    "Label":       label,
+                    "Status":      "❌ FAILED",
+                    "Years Found": "—",
+                    "Date Range":  "—",
+                    "Detail":      status_msg,
+                })
+                continue
+
+            year_cols = sorted([c for c in pivot.columns if isinstance(c, int)])
+
+            # Check for large gaps (rows where ALL years are NaN = uncovered date)
+            gap_rows = pivot[year_cols].isna().all(axis=1).sum()
+            gap_warn = f"  ⚠️ {gap_rows} dates fully missing across all years" if gap_rows > 10 else ""
+
+            summary_rows.append({
+                "Commodity":   comm,
+                "Label":       label,
+                "Status":      "✅ OK" if not gap_warn else "⚠️ Partial",
+                "Years Found": ", ".join(str(y) for y in year_cols),
+                "Date Range":  "Jan-01 → Dec-31 (calendar year)",
+                "Detail":      status_msg + gap_warn,
+            })
+
+        df_iv = pd.DataFrame(summary_rows)
+        st.dataframe(
+            df_iv.style.apply(_color_status, axis=1),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # Per-commodity year coverage detail
+        st.markdown("##### Year Coverage Detail")
+        for comm in iv_commodities:
+            pivot, _ = load_iv_data(comm)
+            if pivot.empty:
+                continue
+            year_cols = sorted([c for c in pivot.columns if isinstance(c, int)])
+            st.markdown(f"**{comm}**")
+            year_rows = []
+            for yr in year_cols:
+                col_data  = pivot[yr].dropna()
+                pct_cover = round(len(col_data) / 365 * 100, 1)
+                year_rows.append({
+                    "Year":          yr,
+                    "Non-null Days": len(col_data),
+                    "Coverage":      f"{pct_cover}%",
+                    "First Value":   col_data.index[0]  if not col_data.empty else "—",
+                    "Last Value":    col_data.index[-1] if not col_data.empty else "—",
+                    "Status":        "✅ OK" if pct_cover >= 90 else ("⚠️ Partial" if pct_cover >= 50 else "❌ Sparse"),
+                })
+            df_yr = pd.DataFrame(year_rows)
+            st.dataframe(
+                df_yr.style.apply(_color_status, axis=1),
+                use_container_width=True,
+                hide_index=True,
+            )
+    else:
+        st.info("Click **▶️ Run Bloomberg IV Check** to validate all IV files.")
+
+    with st.container():
+        st.markdown("""
+        **How to fix a ❌ FAILED file:**
+        1. Open the Bloomberg terminal
+        2. Re-run your IV pull and paste-as-values into the correct `data/bloomberg/` file
+        3. Save and restart the app
+
+        **To add a new commodity:** add entries to `_IV_FILES` and `_IV_LABELS`
+        in `src/providers/iv.py` and create the corresponding Excel file.
+        """)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 3 — CFTC COT Auto-Fetch
+# ══════════════════════════════════════════════════════════════════════════════
+with st.expander("🌾 CFTC COT Data  —  Auto-Fetched from CFTC Website", expanded=True):
+
+    st.markdown(
+        "The COT data is downloaded automatically from the CFTC public website "
+        "and cached for 6 hours. This section validates connectivity, commodity "
+        "name matching, data freshness, and column completeness."
+    )
+
+    cot_lookback = st.selectbox(
+        "Lookback window to check",
+        options     = [3, 5, 7],
+        index       = 1,
+        format_func = lambda x: f"{x} years",
+        key         = "cot_status_lookback",
+    )
+
+    if st.button("▶️ Run COT Check", type="primary", key="run_cot"):
+
+        with st.spinner("Fetching COT data from CFTC…"):
+            cot_df, cot_status_msg = fetch_cot_data(lookback_years=cot_lookback)
+
+        # ── Top-level fetch result ─────────────────────────────────────────
+        if cot_df.empty:
+            st.error(f"❌ COT fetch failed entirely. Detail: {cot_status_msg}")
+        else:
+            st.success(f"✅ {cot_status_msg}")
+
+            latest_date = cot_df["Report_Date_as_YYYY-MM-DD"].max()
+            oldest_date = cot_df["Report_Date_as_YYYY-MM-DD"].min()
+            days_since  = (pd.Timestamp(date.today()) - latest_date).days
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Latest Report Date",  latest_date.strftime("%b %d, %Y"))
+            c2.metric("Oldest Report Date",  oldest_date.strftime("%b %d, %Y"))
+            c3.metric("Days Since Last Pull", str(days_since),
+                      delta="On time" if days_since <= 8 else "Overdue",
+                      delta_color="normal" if days_since <= 8 else "inverse")
+            c4.metric("Total Rows Loaded",   f"{len(cot_df):,}")
+
+            if days_since > 8:
+                st.warning(
+                    f"⚠️ Latest data is {days_since} days old. "
+                    "Expected a Friday release within the last 7 days. "
+                    "Check your network connection or the CFTC website."
+                )
+
+            st.divider()
+
+            # ── Commodity match table ──────────────────────────────────────
+            st.markdown("##### Commodity Match Status")
+            st.caption(
+                "Each commodity in `COT_COMMODITIES` is matched against the "
+                "`Market_and_Exchange_Names` column in the CFTC file. "
+                "If a commodity shows ❌, the `cftc_name` string needs to be corrected."
             )
 
+            matched_keys = cot_df["commodity_key"].dropna().unique()
+            comm_rows    = []
 
-# ─────────────────────────────────────────────────────────────────────────────
-with st.expander("🔍 Data fetch details (expand to troubleshoot)"):
-    ok_icon = "✅" if not cot_df.empty else "❌"
-    st.markdown(f"**{ok_icon} CFTC COT Data**")
-    st.caption(cot_status)
+            for key, meta in COT_COMMODITIES.items():
+                if key not in matched_keys:
+                    comm_rows.append({
+                        "Commodity":       meta["display"],
+                        "Category":        meta["category"],
+                        "CFTC Name Used":  meta["cftc_name"],
+                        "Status":          "❌ NOT MATCHED",
+                        "Weeks of Data":   "—",
+                        "Latest Date":     "—",
+                        "Oldest Date":     "—",
+                    })
+                    continue
 
-    if not cot_df.empty:
-        st.caption(f"Total rows loaded: {len(cot_df):,}")
-        st.caption(f"Commodities matched: {cot_df['commodity_key'].nunique()} of {len(COT_COMMODITIES)}")
+                ts = get_commodity_timeseries(cot_df, key)
+                comm_rows.append({
+                    "Commodity":      meta["display"],
+                    "Category":       meta["category"],
+                    "CFTC Name Used": meta["cftc_name"],
+                    "Status":         "✅ OK",
+                    "Weeks of Data":  len(ts),
+                    "Latest Date":    ts.index[-1].strftime("%b %d, %Y") if not ts.empty else "—",
+                    "Oldest Date":    ts.index[0].strftime("%b %d, %Y")  if not ts.empty else "—",
+                })
 
-        missing = [
-            f"{v['display']} ({v['cftc_name']})"
-            for k, v in COT_COMMODITIES.items()
-            if k not in cot_df["commodity_key"].unique()
-        ]
-        if missing:
-            st.warning(
-                "The following commodities were not found in the CFTC file. "
-                "Verify the 'cftc_name' strings in `src/providers/cot.py` "
-                "against the raw CFTC CSV:\n\n" + "\n".join(f"- {m}" for m in missing)
+            df_comm = pd.DataFrame(comm_rows)
+            st.dataframe(
+                df_comm.style.apply(_color_status, axis=1),
+                use_container_width=True,
+                hide_index=True,
             )
 
-    if show_price:
-        st.caption(f"Price overlay ({meta['yahoo_continuous']}): {price_status}")
+            # ── Column completeness ────────────────────────────────────────
+            st.divider()
+            st.markdown("##### Column Completeness")
+            st.caption(
+                "Checks that all expected CFTC columns are present in the downloaded file. "
+                "Missing columns appear when the CFTC changes their file format."
+            )
+
+            expected_cols = [
+                "Report_Date_as_YYYY-MM-DD",
+                "Market_and_Exchange_Names",
+                "Open_Interest_All",
+                "M_Money_Positions_Long_All",
+                "M_Money_Positions_Short_All",
+                "M_Money_Positions_Spreading_All",
+                "Prod_Merc_Positions_Long_All",
+                "Prod_Merc_Positions_Short_All",
+                "Traders_M_Money_Long_All",
+                "Traders_M_Money_Short_All",
+                "Traders_M_Money_Spread_All",
+            ]
+
+            col_rows = []
+            for col in expected_cols:
+                present  = col in cot_df.columns
+                null_pct = round(cot_df[col].isna().mean() * 100, 1) if present else None
+                col_rows.append({
+                    "Column":       col,
+                    "Status":       "✅ Present" if present else "❌ MISSING",
+                    "Null %":       f"{null_pct}%" if null_pct is not None else "—",
+                })
+
+            # Also flag the Swap short double-underscore variant
+            swap_v1 = "Swap__Positions_Short_All"
+            swap_v2 = "Swap_Positions_Short_All"
+            swap_found = swap_v1 if swap_v1 in cot_df.columns else (swap_v2 if swap_v2 in cot_df.columns else None)
+            col_rows.append({
+                "Column":  f"Swap Short ({swap_v1} or {swap_v2})",
+                "Status":  f"✅ Found as: {swap_found}" if swap_found else "❌ MISSING",
+                "Null %":  f"{round(cot_df[swap_found].isna().mean()*100,1)}%" if swap_found else "—",
+            })
+
+            df_cols = pd.DataFrame(col_rows)
+            st.dataframe(
+                df_cols.style.apply(_color_status, axis=1),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            # ── Data freshness per commodity ───────────────────────────────
+            st.divider()
+            st.markdown("##### Per-Commodity Data Freshness")
+
+            fresh_rows = []
+            for key, meta in COT_COMMODITIES.items():
+                if key not in matched_keys:
+                    continue
+                ts = get_commodity_timeseries(cot_df, key)
+                if ts.empty:
+                    continue
+                gap = (pd.Timestamp(date.today()) - ts.index[-1]).days
+                fresh_rows.append({
+                    "Commodity":    meta["display"],
+                    "Latest Week":  ts.index[-1].strftime("%b %d, %Y"),
+                    "Days Stale":   gap,
+                    "Weeks Loaded": len(ts),
+                    "Status":       "✅ Current" if gap <= 8 else "⚠️ Stale",
+                })
+
+            df_fresh = pd.DataFrame(fresh_rows)
+            st.dataframe(
+                df_fresh.style.apply(_color_status, axis=1),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    else:
+        st.info("Click **▶️ Run COT Check** to validate the CFTC data fetch.")
+
+    with st.container():
+        st.markdown("""
+        **If a commodity shows ❌ NOT MATCHED:**
+        1. Download the current year's zip manually from:
+           `https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip`
+        2. Open the CSV and search the `Market_and_Exchange_Names` column
+        3. Copy the exact string and paste it into the `cftc_name` field
+           for that commodity in `src/providers/cot.py`
+
+        **If the fetch is stale (> 8 days):**
+        - Check your internet connection
+        - The CFTC occasionally delays releases around holidays
+        - Visit `https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm`
+          to confirm the latest release date
+
+        **Cache note:** COT data is cached for 6 hours. To force a refresh,
+        restart the Streamlit app.
+        """)
