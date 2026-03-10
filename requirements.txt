@@ -4,3 +4,4 @@ numpy
 pyyaml
 plotly
 openpyxl
+requests
