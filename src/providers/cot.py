@@ -366,6 +366,13 @@ def get_snapshot(df: pd.DataFrame, pct_window_yrs: int = 3) -> pd.DataFrame:
             v = ts[col].iloc[-1] if col in ts.columns else np.nan
             return round(float(v), decimals) if pd.notna(v) else None
 
+        # All-time OI extremes across the full loaded history (not just lookback window)
+        oi_series    = ts["Open_Interest"].dropna()
+        oi_max       = int(oi_series.max()) if not oi_series.empty else None
+        oi_min       = int(oi_series.min()) if not oi_series.empty else None
+        oi_max_date  = oi_series.idxmax().date() if not oi_series.empty else None
+        oi_min_date  = oi_series.idxmin().date() if not oi_series.empty else None
+
         rows.append({
             "Commodity":     meta["display"],
             "Category":      meta["category"],
@@ -378,6 +385,10 @@ def get_snapshot(df: pd.DataFrame, pct_window_yrs: int = 3) -> pd.DataFrame:
             "MM_Percentile": _int("MM_Percentile"),
             "Prod_Net":      _int("Prod_Net"),
             "Open_Interest": _int("Open_Interest"),
+            "OI_AllTime_Max":      oi_max,
+            "OI_AllTime_Max_Date": str(oi_max_date) if oi_max_date else "—",
+            "OI_AllTime_Min":      oi_min,
+            "OI_AllTime_Min_Date": str(oi_min_date) if oi_min_date else "—",
         })
 
     return pd.DataFrame(rows)

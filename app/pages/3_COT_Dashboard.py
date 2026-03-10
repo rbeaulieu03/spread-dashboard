@@ -160,15 +160,19 @@ with tab_snap:
         st.divider()
 
         display_cols = {
-            "Commodity":     "Commodity",
-            "Category":      "Category",
-            "As_Of":         "As Of",
-            "MM_Net":        "MM Net (contracts)",
-            "MM_Net_WoW":    "WoW Change",
-            "MM_Pct_OI":     "MM % of OI",
-            "MM_Percentile": f"Percentile ({pct_window}yr)",
-            "Prod_Net":      "Commercial Net",
-            "Open_Interest": "Open Interest",
+            "Commodity":           "Commodity",
+            "Category":            "Category",
+            "As_Of":               "As Of",
+            "MM_Net":              "MM Net (contracts)",
+            "MM_Net_WoW":          "WoW Change",
+            "MM_Pct_OI":           "MM % of OI",
+            "MM_Percentile":       f"Percentile ({pct_window}yr)",
+            "Prod_Net":            "Commercial Net",
+            "Open_Interest":       "Open Interest",
+            "OI_AllTime_Max":      "OI All-Time High",
+            "OI_AllTime_Max_Date": "ATH Date",
+            "OI_AllTime_Min":      "OI All-Time Low",
+            "OI_AllTime_Min_Date": "ATL Date",
         }
         table = snap_filtered[list(display_cols.keys())].rename(columns=display_cols).copy()
 
@@ -201,6 +205,8 @@ with tab_snap:
                 "MM % of OI":                   lambda v: f"{v:.1f}%" if pd.notna(v) else "—",
                 "Commercial Net":               _fmt_int,
                 "Open Interest":                _fmt_int,
+                "OI All-Time High":             _fmt_int,
+                "OI All-Time Low":              _fmt_int,
             },
             na_rep="—",
         )
