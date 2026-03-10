@@ -323,7 +323,7 @@ commodities:
 
       - id: "HEI_N"
         name: "Jul Futures vs Index"
-        window: {start_mmdd: "01-15", end_mmdd: "07-13"}
+        window: {start_mmdd: "07-15", end_mmdd: "07-13"}
         legs:
           - {month: "N", year_offset: 0, commodity: "LeanHogs"}
           - {type: "continuous", symbol: "IHX.X", commodity: "LeanHogIndex"}
