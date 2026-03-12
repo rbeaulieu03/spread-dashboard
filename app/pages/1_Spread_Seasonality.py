@@ -106,10 +106,11 @@ with st.spinner(f"Loading {commodity} {spread_name} data…"):
     )
 
 # ── Compute seasonality pivot ─────────────────────────────────────────────────
-start_mmdd = spread_def["window"]["start_mmdd"]
-end_mmdd   = spread_def["window"]["end_mmdd"]
+start_mmdd         = spread_def["window"]["start_mmdd"]
+end_mmdd           = spread_def["window"]["end_mmdd"]
+display_start_mmdd = spread_def["window"].get("display_start_mmdd", None)
 
-pivot = compute_seasonality(spread_data, start_mmdd, end_mmdd, selected_years)
+pivot = compute_seasonality(spread_data, start_mmdd, end_mmdd, selected_years, display_start_mmdd)
 
 # ── Render chart ──────────────────────────────────────────────────────────────
 highlight_year = max(selected_years)

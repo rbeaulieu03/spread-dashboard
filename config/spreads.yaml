@@ -289,6 +289,126 @@ commodities:
           - {month: "Z", year_offset: 0, commodity: "Wheat"}
           - {month: "Z", year_offset: 0, commodity: "Corn"}
 
+  FeederCattle:
+    unit: "cents/lb"
+    prophetx_prefix: "@GF"
+    spreads:
+      - id: "GF_F-H"
+        name: "Jan-Mar"
+        window: {start_mmdd: "11-01", end_mmdd: "01-25"}
+        legs:
+          - {month: "F", year_offset: 0}   # January  (season year)
+          - {month: "H", year_offset: 0}   # March    (season year)
+
+      - id: "GF_H-J"
+        name: "Mar-Apr"
+        window: {start_mmdd: "11-01", end_mmdd: "03-25"}
+        legs:
+          - {month: "H", year_offset: 0}   # March    (season year)
+          - {month: "J", year_offset: 0}   # April    (season year)
+
+      - id: "GF_J-K"
+        name: "Apr-May"
+        window: {start_mmdd: "11-01", end_mmdd: "04-24"}
+        legs:
+          - {month: "J", year_offset: 0}   # April    (season year)
+          - {month: "K", year_offset: 0}   # May      (season year)
+
+      - id: "GF_K-Q"
+        name: "May-Aug"
+        window: {start_mmdd: "11-01", end_mmdd: "05-22"}
+        legs:
+          - {month: "K", year_offset: 0}   # May      (season year)
+          - {month: "Q", year_offset: 0}   # August   (season year)
+
+      - id: "GF_Q-U"
+        name: "Aug-Sep"
+        window: {start_mmdd: "11-01", end_mmdd: "08-21"}
+        legs:
+          - {month: "Q", year_offset: 0}   # August   (season year)
+          - {month: "U", year_offset: 0}   # September (season year)
+
+      - id: "GF_U-V"
+        name: "Sep-Oct"
+        window: {start_mmdd: "11-01", end_mmdd: "09-25"}
+        legs:
+          - {month: "U", year_offset: 0}   # September (season year)
+          - {month: "V", year_offset: 0}   # October  (season year)
+
+      - id: "GF_V-X"
+        name: "Oct-Nov"
+        window: {start_mmdd: "12-01", end_mmdd: "10-23"}
+        legs:
+          - {month: "V", year_offset: 0}   # October  (season year)
+          - {month: "X", year_offset: 0}   # November (season year)
+
+      - id: "GF_X-F"
+        name: "Nov-Jan"
+        window: {start_mmdd: "12-01", end_mmdd: "11-20", display_start_mmdd: "01-27"}
+        legs:
+          - {month: "X", year_offset: 0}   # November (season year)
+          - {month: "F", year_offset: 1}   # January  (season year + 1)
+
+  FeederCattleIndex:
+    unit: "cents/lb"
+    prophetx_prefix: null
+    spreads:
+      - id: "GFI_F"
+        name: "Jan Futures vs Index"
+        window: {start_mmdd: "07-15", end_mmdd: "01-27"}
+        legs:
+          - {month: "F", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_H"
+        name: "Mar Futures vs Index"
+        window: {start_mmdd: "09-15", end_mmdd: "03-27"}
+        legs:
+          - {month: "H", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_J"
+        name: "Apr Futures vs Index"
+        window: {start_mmdd: "10-15", end_mmdd: "04-27"}
+        legs:
+          - {month: "J", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_K"
+        name: "May Futures vs Index"
+        window: {start_mmdd: "11-15", end_mmdd: "05-27"}
+        legs:
+          - {month: "K", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_Q"
+        name: "Aug Futures vs Index"
+        window: {start_mmdd: "09-15", end_mmdd: "08-27"}
+        legs:
+          - {month: "Q", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_U"
+        name: "Sep Futures vs Index"
+        window: {start_mmdd: "10-15", end_mmdd: "09-27"}
+        legs:
+          - {month: "U", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_V"
+        name: "Oct Futures vs Index"
+        window: {start_mmdd: "11-15", end_mmdd: "10-27"}
+        legs:
+          - {month: "V", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
+      - id: "GFI_X"
+        name: "Nov Futures vs Index"
+        window: {start_mmdd: "12-15", end_mmdd: "11-27"}
+        legs:
+          - {month: "X", year_offset: 0, commodity: "FeederCattle"}
+          - {type: "continuous", symbol: "ICX.X", commodity: "FeederCattleIndex"}
+
   LeanHogIndex:
     unit: "cents/lb"
     prophetx_prefix: null

@@ -102,20 +102,25 @@ def build_mmdd_index(start_mmdd: str, end_mmdd: str) -> list:
 
 
 def compute_seasonality(
-    spread_data:  dict,
-    start_mmdd:   str,
-    end_mmdd:     str,
-    season_years: list,
+    spread_data:        dict,
+    start_mmdd:         str,
+    end_mmdd:           str,
+    season_years:       list,
+    display_start_mmdd: str = None,
 ) -> pd.DataFrame:
     """
     Build the seasonality pivot table from per-season spread data.
 
     Parameters
     ----------
-    spread_data  : {season_year (int): pd.Series with DatetimeIndex} or None per year
-    start_mmdd   : window start, e.g. "07-15"
-    end_mmdd     : window end,   e.g. "07-10"
-    season_years : years to include, e.g. [2021, 2022, 2023, 2024, 2025, 2026]
+    spread_data        : {season_year (int): pd.Series with DatetimeIndex} or None per year
+    start_mmdd         : window start, e.g. "07-15"  (used for contract fetching)
+    end_mmdd           : window end,   e.g. "07-10"
+    season_years       : years to include, e.g. [2021, 2022, 2023, 2024, 2025, 2026]
+    display_start_mmdd : optional MM-DD to trim the x-axis start for display purposes.
+                         Must fall within the window. Useful when contracts don't have
+                         data at the very start of the fetch window (e.g. "01-27").
+                         Does not affect which contracts are fetched.
 
     Returns
     -------
@@ -173,12 +178,34 @@ def compute_seasonality(
     # ── Cross-year statistics ─────────────────────────────────────────────────
     year_cols = [c for c in pivot.columns if isinstance(c, int)]
 
+    # Count how many seasons actually have data at each MM-DD position.
+    # Stats are only meaningful where enough seasons overlap — otherwise the
+    # band and average reflect a small biased sample (e.g. the early part of
+    # a long window where the back-leg contract doesn't exist yet).
     if year_cols:
-        pivot["Average"] = pivot[year_cols].mean(axis=1)
+        row_counts = pivot[year_cols].count(axis=1)
+        min_years_for_avg  = max(3, len(year_cols) // 2)
+        min_years_for_band = max(4, len(year_cols) // 2 + 1)
 
-    # Only compute percentile band when we have enough years
+        pivot["Average"] = pivot[year_cols].mean(axis=1).where(
+            row_counts >= min_years_for_avg
+        )
+
+    # Only compute percentile band when we have enough years overall AND
+    # enough seasons have data at each individual row position.
     if len(year_cols) >= 4:
-        pivot["p10"] = pivot[year_cols].quantile(0.10, axis=1)
-        pivot["p90"] = pivot[year_cols].quantile(0.90, axis=1)
+        pivot["p10"] = pivot[year_cols].quantile(0.10, axis=1).where(
+            row_counts >= min_years_for_band
+        )
+        pivot["p90"] = pivot[year_cols].quantile(0.90, axis=1).where(
+            row_counts >= min_years_for_band
+        )
+
+    # ── Optional display trimming ─────────────────────────────────────────────
+    # Trim the x-axis start without affecting the underlying data fetch.
+    # Used when contracts don't have data at the very start of the fetch window.
+    if display_start_mmdd is not None and display_start_mmdd in pivot.index:
+        start_pos = pivot.index.get_loc(display_start_mmdd)
+        pivot = pivot.iloc[start_pos:]
 
     return pivot

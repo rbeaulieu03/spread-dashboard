@@ -51,6 +51,8 @@ _COMMODITY_FILES = {
     "KCWheat":    "kcwheat.xlsx",
     "SoyOil":      "soyoil.xlsx",
     "LeanHogIndex": "hog_index.xlsx",
+    "FeederCattle": "feeder.xlsx",
+    "FeederCattleIndex": "feeder_index.xlsx",
     "WheatCorn":   None,   # intercommodity — no own file
 }
 

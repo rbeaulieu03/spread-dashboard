@@ -29,7 +29,7 @@ _YEAR_COLORS = [
 ]
 _CURRENT_COLOR   = "#00FFFF"                     # bright cyan — current year
 _AVERAGE_COLOR   = "#FFFFFF"                     # white dashed
-_BAND_COLOR      = "rgba(255, 255, 255, 0.06)"   # very subtle band fill
+_BAND_COLOR      = "rgba(255, 255, 255, 0.18)"   # subtle but visible band fill
 
 
 def build_seasonality_chart(

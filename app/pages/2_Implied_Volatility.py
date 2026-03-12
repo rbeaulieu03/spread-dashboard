@@ -40,7 +40,7 @@ _YEAR_COLORS = [
 ]
 _CURRENT_COLOR  = "#00FFFF"   # bright cyan — most recent year
 _AVERAGE_COLOR  = "#FFFFFF"   # white dashed
-_BAND_COLOR     = "rgba(255, 255, 255, 0.06)"
+_BAND_COLOR     = "rgba(255, 255, 255, 0.18)"
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
