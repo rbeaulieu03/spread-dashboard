@@ -15,10 +15,16 @@ always know the data vintage.
 
 CFTC URL PATTERN
 -----------------
-    https://www.cftc.gov/files/dea/history/fut_disagg_txt_{YEAR}.zip
+    https://www.cftc.gov/files/dea/history/com_disagg_txt_{YEAR}.zip
 
-Each zip contains one CSV with all disaggregated futures-only data
-for that calendar year.
+Each zip contains one CSV with all disaggregated **futures + options
+combined** positions for that calendar year. This matches the COT short
+report at https://www.cftc.gov/dea/options/ag_sof.htm.
+
+(The futures-only equivalent is fut_disagg_txt_{YEAR}.zip and shows the
+report at .../dea/futures/ag_sf.htm — we previously used that file but
+switched to the combined version because options positions are material
+for several Tyson commodities.)
 
 CACHING STRATEGY
 -----------------
@@ -66,7 +72,8 @@ COT_COMMODITIES = {
         "category":         "Grains",
     },
     "Chicago Wheat": {
-        "cftc_name":        "WHEAT - CHICAGO BOARD OF TRADE",
+        # CBOT Soft Red Winter wheat. Verified against CFTC AG short report.
+        "cftc_name":        "WHEAT-SRW - CHICAGO BOARD OF TRADE",
         "display":          "Chicago Wheat",
         "unit":             "cents/bu",
         "yahoo_continuous": "ZW=F",
@@ -82,13 +89,9 @@ COT_COMMODITIES = {
         "category":         "Grains",
     },
     "Minneapolis Wheat": {
-        # NOTE: MGEX HRS wheat. MGEX rebranded to MIAX Futures (2023). The CFTC
-        # name has shifted over time — if no data appears, open the raw CFTC csv
-        # and look for the current spelling. Common past forms:
-        #   "WHEAT-HRSpring - MIAX FUTURES"
-        #   "WHEAT-HRSpring - MINNEAPOLIS GRAIN EXCHANGE"
-        #   "HARD RED SPRING WHEAT - MINNEAPOLIS GRAIN EXCHANGE"
-        "cftc_name":        "WHEAT-HRSpring - MIAX FUTURES",
+        # MIAX Futures Exchange (formerly Minneapolis Grain Exchange) HRS wheat.
+        # Verified against CFTC AG short report.
+        "cftc_name":        "WHEAT-HRSpring - MIAX FUTURES EXCHANGE",
         "display":          "Minneapolis Wheat",
         "unit":             "cents/bu",
         "yahoo_continuous": "MW=F",
@@ -109,18 +112,18 @@ COT_COMMODITIES = {
         "category":         "Grains",
     },
     "WTI Crude": {
-        "cftc_name":        "CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE",
+        # NYMEX physically-settled WTI futures (the primary CL contract).
+        # Verified against CFTC combined petroleum short report (petroleum_sof.htm).
+        # NOTE: CFTC renamed this from "CRUDE OIL, LIGHT SWEET" to "WTI-PHYSICAL".
+        "cftc_name":        "WTI-PHYSICAL - NEW YORK MERCANTILE EXCHANGE",
         "display":          "WTI Crude",
         "unit":             "$/bbl",
         "yahoo_continuous": "CL=F",
         "category":         "Energy",
     },
     "Heating Oil": {
-        # NOTE: NYMEX heating oil futures were rebranded to NY Harbor ULSD
-        # (ultra-low sulfur diesel) in 2013, and the CFTC name was updated to
-        # match. If no data appears, check the raw CSV for the current spelling
-        # (also seen historically as "#2 HEATING OIL, NY HARBOR - NEW YORK
-        # MERCANTILE EXCHANGE").
+        # NYMEX heating oil futures, rebranded to NY Harbor ULSD in 2013.
+        # Verified against CFTC combined petroleum short report.
         "cftc_name":        "NY HARBOR ULSD - NEW YORK MERCANTILE EXCHANGE",
         "display":          "Heating Oil",
         "unit":             "$/gal",
@@ -128,7 +131,10 @@ COT_COMMODITIES = {
         "category":         "Energy",
     },
     "Natural Gas": {
-        "cftc_name":        "NATURAL GAS - NEW YORK MERCANTILE EXCHANGE",
+        # Henry Hub physically-settled NG futures. Verified against CFTC
+        # combined nat-gas short report (nat_gas_sof.htm) — the combined
+        # report labels this contract "NAT GAS NYME" (not "NATURAL GAS").
+        "cftc_name":        "NAT GAS NYME - NEW YORK MERCANTILE EXCHANGE",
         "display":          "Natural Gas",
         "unit":             "$/MMBtu",
         "yahoo_continuous": "NG=F",
@@ -179,7 +185,7 @@ _SWAP_LONG       = "Swap_Positions_Long_All"
 _SWAP_SHORT_v1   = "Swap__Positions_Short_All"   # double underscore (most common)
 _SWAP_SHORT_v2   = "Swap_Positions_Short_All"    # single underscore (fallback)
 
-_CFTC_URL = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
+_CFTC_URL = "https://www.cftc.gov/files/dea/history/com_disagg_txt_{year}.zip"
 
 
 # ── Download helpers ──────────────────────────────────────────────────────────
