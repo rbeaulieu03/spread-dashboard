@@ -59,6 +59,24 @@ _PRICE_COLOR = "#374151"   # dark slate (was white)
 _LONG_COLOR  = "#4CAF7D"
 _SHORT_COLOR = "#DC143C"
 
+# ── Snapshot display order ────────────────────────────────────────────────────
+# Custom ordering for the Cross-Commodity Positioning Snapshot table.
+# Items not listed here are appended at the end in their natural order.
+_SNAPSHOT_ORDER = [
+    "Corn",
+    "Soybeans",
+    "Soybean Meal",
+    "Soybean Oil",
+    "Live Cattle",
+    "Lean Hogs",
+    "Natural Gas",
+    "Heating Oil",
+    "WTI Crude",
+    "Chicago Wheat",
+    "KC Wheat",
+    "Minneapolis Wheat",
+]
+
 # NOTE: hovermode and margin are intentionally excluded from _LAYOUT_BASE
 # so each chart can set its own without keyword conflicts.
 _LAYOUT_BASE = dict(
@@ -149,6 +167,19 @@ with tab_snap:
         snap_filtered = snap_df[snap_df["Commodity"].isin(
             [COT_COMMODITIES[k]["display"] for k in filtered_keys]
         )].copy()
+
+        # Apply custom snapshot ordering — items in _SNAPSHOT_ORDER first
+        # (in that order), then any remaining commodities in their original order.
+        _order_rank = {name: i for i, name in enumerate(_SNAPSHOT_ORDER)}
+        snap_filtered["_sort_rank"] = snap_filtered["Commodity"].map(
+            lambda c: _order_rank.get(c, len(_SNAPSHOT_ORDER))
+        )
+        snap_filtered = (
+            snap_filtered
+            .sort_values("_sort_rank", kind="stable")
+            .drop(columns="_sort_rank")
+            .reset_index(drop=True)
+        )
 
         n_extreme_long  = (snap_filtered["MM_Percentile"] >= 90).sum()
         n_extreme_short = (snap_filtered["MM_Percentile"] <= 10).sum()

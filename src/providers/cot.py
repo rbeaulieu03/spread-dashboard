@@ -58,6 +58,13 @@ COT_COMMODITIES = {
         "yahoo_continuous": "ZC=F",
         "category":         "Grains",
     },
+    "Soybeans": {
+        "cftc_name":        "SOYBEANS - CHICAGO BOARD OF TRADE",
+        "display":          "Soybeans",
+        "unit":             "cents/bu",
+        "yahoo_continuous": "ZS=F",
+        "category":         "Grains",
+    },
     "Chicago Wheat": {
         "cftc_name":        "WHEAT - CHICAGO BOARD OF TRADE",
         "display":          "Chicago Wheat",
@@ -72,6 +79,19 @@ COT_COMMODITIES = {
         "display":          "KC Wheat",
         "unit":             "cents/bu",
         "yahoo_continuous": "KE=F",
+        "category":         "Grains",
+    },
+    "Minneapolis Wheat": {
+        # NOTE: MGEX HRS wheat. MGEX rebranded to MIAX Futures (2023). The CFTC
+        # name has shifted over time — if no data appears, open the raw CFTC csv
+        # and look for the current spelling. Common past forms:
+        #   "WHEAT-HRSpring - MIAX FUTURES"
+        #   "WHEAT-HRSpring - MINNEAPOLIS GRAIN EXCHANGE"
+        #   "HARD RED SPRING WHEAT - MINNEAPOLIS GRAIN EXCHANGE"
+        "cftc_name":        "WHEAT-HRSpring - MIAX FUTURES",
+        "display":          "Minneapolis Wheat",
+        "unit":             "cents/bu",
+        "yahoo_continuous": "MW=F",
         "category":         "Grains",
     },
     "Soybean Meal": {
@@ -93,6 +113,18 @@ COT_COMMODITIES = {
         "display":          "WTI Crude",
         "unit":             "$/bbl",
         "yahoo_continuous": "CL=F",
+        "category":         "Energy",
+    },
+    "Heating Oil": {
+        # NOTE: NYMEX heating oil futures were rebranded to NY Harbor ULSD
+        # (ultra-low sulfur diesel) in 2013, and the CFTC name was updated to
+        # match. If no data appears, check the raw CSV for the current spelling
+        # (also seen historically as "#2 HEATING OIL, NY HARBOR - NEW YORK
+        # MERCANTILE EXCHANGE").
+        "cftc_name":        "NY HARBOR ULSD - NEW YORK MERCANTILE EXCHANGE",
+        "display":          "Heating Oil",
+        "unit":             "$/gal",
+        "yahoo_continuous": "HO=F",
         "category":         "Energy",
     },
     "Natural Gas": {
