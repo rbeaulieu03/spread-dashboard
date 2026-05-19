@@ -41,19 +41,21 @@ st.set_page_config(
     layout     = "wide",
 )
 
-# ── Dark theme constants ──────────────────────────────────────────────────────
-_BG         = "#000000"
-_PLOT_BG    = "#000000"
-_GRID       = "#1A1A1A"
-_LINE       = "#333333"
-_FONT_COLOR = "#BBBBBB"
-_TICK_COLOR = "#AAAAAA"
-_LEGEND_BG  = "rgba(0,0,0,0.75)"
-_HOVER_BG   = "rgba(0,0,0,0.85)"
+# ── Light theme constants ─────────────────────────────────────────────────────
+_BG         = "#FFFFFF"
+_PLOT_BG    = "#FFFFFF"
+_GRID       = "#E5E7EB"
+_LINE       = "#D1D5DB"
+_FONT_COLOR = "#374151"
+_TICK_COLOR = "#6B7280"
+_TITLE_FG   = "#111827"
+_LEGEND_BG  = "rgba(255,255,255,0.85)"
+_HOVER_BG   = "rgba(255,255,255,0.95)"
+_ZERO_LINE  = "#D1D5DB"
 
-_MM_COLOR    = "#00FFFF"
+_MM_COLOR    = "#0891B2"   # deep cyan (was bright cyan)
 _PROD_COLOR  = "#FF8C00"
-_PRICE_COLOR = "#FFFFFF"
+_PRICE_COLOR = "#374151"   # dark slate (was white)
 _LONG_COLOR  = "#4CAF7D"
 _SHORT_COLOR = "#DC143C"
 
@@ -66,9 +68,9 @@ _LAYOUT_BASE = dict(
     legend        = dict(
         x=1.01, y=1.0, xanchor="left", yanchor="top",
         bgcolor=_LEGEND_BG, bordercolor=_LINE, borderwidth=1,
-        font=dict(size=12, color="#CCCCCC"),
+        font=dict(size=12, color=_FONT_COLOR),
     ),
-    hoverlabel = dict(bgcolor=_HOVER_BG, bordercolor="#444444", font=dict(size=11, color="#FFFFFF")),
+    hoverlabel = dict(bgcolor=_HOVER_BG, bordercolor=_LINE, font=dict(size=11, color=_TITLE_FG)),
 )
 
 
@@ -181,13 +183,13 @@ with tab_snap:
             if pct is None:
                 return [""] * len(row)
             if pct >= 90:
-                bg = "background-color: #0d2b0d"
+                bg = "background-color: #DCFCE7"   # light green tint, extreme long
             elif pct >= 75:
-                bg = "background-color: #0a200a"
+                bg = "background-color: #F0FDF4"   # very pale green, moderate long
             elif pct <= 10:
-                bg = "background-color: #2b0d0d"
+                bg = "background-color: #FEE2E2"   # light red tint, extreme short
             elif pct <= 25:
-                bg = "background-color: #200a0a"
+                bg = "background-color: #FEF2F2"   # very pale red, moderate short
             else:
                 bg = ""
             return [bg] * len(row)
@@ -352,7 +354,7 @@ with tab_deep:
             showlegend = True,
             title      = dict(
                 text = f"{meta['display']} — Managed Money Positioning",
-                font = dict(size=14, color="#FFFFFF", family="Arial"),
+                font = dict(size=14, color=_TITLE_FG, family="Arial"),
                 x=0.5, y=0.98,
             ),
         )
@@ -363,7 +365,7 @@ with tab_deep:
             tickfont      = dict(size=11, color=_TICK_COLOR),
             gridcolor     = _GRID,
             linecolor     = _LINE,
-            zerolinecolor = "#2A2A2A",
+            zerolinecolor = _ZERO_LINE,
             secondary_y   = False,
             row=1, col=1,
         )
@@ -383,7 +385,7 @@ with tab_deep:
                 tickfont      = dict(size=11, color=_TICK_COLOR),
                 gridcolor     = _GRID,
                 linecolor     = _LINE,
-                zerolinecolor = "#2A2A2A",
+                zerolinecolor = _ZERO_LINE,
                 row=2, col=1,
             )
 
@@ -421,7 +423,7 @@ with tab_deep:
             margin    = dict(l=70, r=150, t=55, b=70),
             title     = dict(
                 text = f"{meta['display']} — Managed Money Gross Positions",
-                font = dict(size=14, color="#FFFFFF", family="Arial"),
+                font = dict(size=14, color=_TITLE_FG, family="Arial"),
                 x=0.5, y=0.98,
             ),
             yaxis = dict(
@@ -430,7 +432,7 @@ with tab_deep:
                 gridcolor = _GRID,
                 linecolor = _LINE,
                 zeroline  = True,
-                zerolinecolor = "#2A2A2A",
+                zerolinecolor = _ZERO_LINE,
             ),
         )
         st.plotly_chart(fig2, use_container_width=True)
@@ -503,13 +505,13 @@ with tab_flow:
             if wow is None or (isinstance(wow, float) and np.isnan(wow)):
                 return [""] * len(row)
             if wow >= 20_000:
-                bg = "background-color: #0d2b0d"
+                bg = "background-color: #DCFCE7"   # strong inflow — light green
             elif wow >= 10_000:
-                bg = "background-color: #0a1a0a"
+                bg = "background-color: #F0FDF4"   # mild inflow — very pale green
             elif wow <= -20_000:
-                bg = "background-color: #2b0d0d"
+                bg = "background-color: #FEE2E2"   # strong outflow — light red
             elif wow <= -10_000:
-                bg = "background-color: #1a0a0a"
+                bg = "background-color: #FEF2F2"   # mild outflow — very pale red
             else:
                 bg = ""
             return [bg] * len(row)
@@ -549,7 +551,7 @@ with tab_flow:
             margin     = dict(l=130, r=60, t=40, b=50),
             title      = dict(
                 text = f"Week-over-Week Change in MM Net Position ({latest_date.strftime('%b %d, %Y')})",
-                font = dict(size=13, color="#FFFFFF", family="Arial"),
+                font = dict(size=13, color=_TITLE_FG, family="Arial"),
                 x=0.5,
             ),
             xaxis = dict(
@@ -558,9 +560,9 @@ with tab_flow:
                 gridcolor = _GRID,
                 linecolor = _LINE,
                 zeroline  = True,
-                zerolinecolor = "#444444",
+                zerolinecolor = _ZERO_LINE,
             ),
-            yaxis      = dict(tickfont=dict(size=12, color="#DDDDDD"), gridcolor=_GRID),
+            yaxis      = dict(tickfont=dict(size=12, color=_FONT_COLOR), gridcolor=_GRID),
             showlegend = False,
         )
         st.plotly_chart(fig_flow, use_container_width=True)
@@ -665,11 +667,11 @@ with tab_scatter:
                     size       = 7,
                     color      = date_norm[:-1],
                     colorscale = [
-                        [0.0,  "#1a3a1a"],
+                        [0.0,  "#BBF7D0"],
                         [0.4,  "#4169E1"],
                         [0.7,  "#9370DB"],
                         [0.85, "#FF8C00"],
-                        [1.0,  "#00FFFF"],
+                        [1.0,  "#0891B2"],
                     ],
                     showscale  = True,
                     colorbar   = dict(
@@ -693,13 +695,13 @@ with tab_scatter:
                 name         = f"Latest ({latest_d.strftime('%b %d, %Y')})",
                 text         = [f"  {latest_d.strftime('%b %d')}"],
                 textposition = "middle right",
-                textfont     = dict(color="#00FFFF", size=11),
+                textfont     = dict(color=_MM_COLOR, size=11),
                 hovertemplate = hover_text[-1] + "<extra></extra>",
                 marker = dict(
                     size   = 14,
-                    color  = "#00FFFF",
+                    color  = _MM_COLOR,
                     symbol = "star",
-                    line   = dict(color="#FFFFFF", width=1),
+                    line   = dict(color=_TITLE_FG, width=1),
                 ),
             ))
 
@@ -707,10 +709,10 @@ with tab_scatter:
                 x                   = 0,
                 line_width          = 1,
                 line_dash           = "dash",
-                line_color          = "#444444",
+                line_color          = _LINE,
                 annotation_text     = "Net Flat",
                 annotation_position = "top",
-                annotation_font     = dict(color="#666666", size=10),
+                annotation_font     = dict(color=_TICK_COLOR, size=10),
             )
 
             fig_sc.update_layout(
@@ -720,7 +722,7 @@ with tab_scatter:
                 margin    = dict(l=70, r=160, t=60, b=70),
                 title     = dict(
                     text = f"{sc_meta['display']} — Traders vs. Net Position ({sc_lookback}yr)",
-                    font = dict(size=14, color="#FFFFFF", family="Arial"),
+                    font = dict(size=14, color=_TITLE_FG, family="Arial"),
                     x=0.5, y=0.98,
                 ),
                 xaxis = dict(
@@ -729,7 +731,7 @@ with tab_scatter:
                     gridcolor  = _GRID,
                     linecolor  = _LINE,
                     zeroline   = True,
-                    zerolinecolor = "#2A2A2A",
+                    zerolinecolor = _ZERO_LINE,
                     ticksuffix = "k",
                 ),
                 yaxis = dict(

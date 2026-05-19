@@ -1,13 +1,13 @@
 """
 plotting.py
 -----------
-Builds the dark-themed Plotly seasonality overlay chart.
+Builds the light-themed Plotly seasonality overlay chart.
 
-Visual design matches the reference charts from Spreads.pdf:
-  - Pure black background
+Visual design:
+  - Off-white / white background, dark text — minimalistic light mode
   - Color gradient from oldest → newest year (green → blue → purple → gold → orange → red)
-  - Current/highlighted year: bright CYAN, noticeably thicker line
-  - Average: white dashed line, medium weight
+  - Current/highlighted year: deep cyan (cyan-600), noticeably thicker line
+  - Average: dark slate dashed line, medium weight
   - 10th–90th percentile band: very subtle semi-transparent fill
   - Unified hover tooltip
 """
@@ -17,8 +17,9 @@ import pandas as pd
 
 
 # ── Color palette ─────────────────────────────────────────────────────────────
-# Matches the reference chart progression: oldest → newest historical year.
-# The highlighted (most recent) year always overrides with bright cyan.
+# Historical year line colors — preserved from the original palette.
+# The highlighted (most recent) year always overrides with a deep cyan
+# that reads clearly against the light background.
 _YEAR_COLORS = [
     "#4CAF7D",   # green          — oldest
     "#4169E1",   # royal blue
@@ -27,9 +28,22 @@ _YEAR_COLORS = [
     "#FF8C00",   # dark orange
     "#DC143C",   # crimson red    — second-most-recent
 ]
-_CURRENT_COLOR   = "#00FFFF"                     # bright cyan — current year
-_AVERAGE_COLOR   = "#FFFFFF"                     # white dashed
-_BAND_COLOR      = "rgba(255, 255, 255, 0.18)"   # subtle but visible band fill
+_CURRENT_COLOR   = "#0891B2"                     # deep cyan — current year
+_AVERAGE_COLOR   = "#374151"                     # dark slate dashed
+_BAND_COLOR      = "rgba(31, 41, 55, 0.08)"      # subtle gray band fill
+
+# ── Light theme chrome (axes, fonts, legend, hover) ───────────────────────────
+_PAPER_BG   = "#FFFFFF"
+_PLOT_BG    = "#FFFFFF"
+_TITLE_FG   = "#111827"
+_FONT_FG    = "#374151"
+_TICK_FG    = "#6B7280"
+_GRID       = "#E5E7EB"
+_AXIS_LINE  = "#D1D5DB"
+_ZERO_LINE  = "#D1D5DB"
+_LEGEND_BG  = "rgba(255,255,255,0.85)"
+_HOVER_BG   = "rgba(255,255,255,0.95)"
+_HOVER_BRD  = "#D1D5DB"
 
 
 def build_seasonality_chart(
@@ -60,9 +74,9 @@ def build_seasonality_chart(
         fig = go.Figure()
         fig.update_layout(
             title       = dict(text="No data available — check Data Status page",
-                               font=dict(color="#FF4444"), x=0.5),
-            paper_bgcolor = "#000000",
-            plot_bgcolor  = "#000000",
+                               font=dict(color="#B91C1C"), x=0.5),
+            paper_bgcolor = _PAPER_BG,
+            plot_bgcolor  = _PLOT_BG,
         )
         return fig
 
@@ -70,13 +84,9 @@ def build_seasonality_chart(
     x_labels  = pivot.index.tolist()
 
     # ── Assign colors ─────────────────────────────────────────────────────────
-    # Non-highlighted years get the palette in order (oldest first).
-    # Highlighted year always gets cyan.
     non_highlight = [y for y in year_cols if y != highlight_year]
     color_map     = {}
 
-    # Align colors so the year just before highlight is always the last
-    # palette color (red), giving the clearest visual separation.
     for i, yr in enumerate(non_highlight):
         palette_idx       = i % len(_YEAR_COLORS)
         color_map[yr]     = _YEAR_COLORS[palette_idx]
@@ -86,7 +96,7 @@ def build_seasonality_chart(
 
     fig = go.Figure()
 
-    # ── 1. Percentile band (behind everything else) ───────────────────────────
+    # ── 1. Percentile band ────────────────────────────────────────────────────
     if show_percentile_band and "p10" in pivot.columns and "p90" in pivot.columns:
         p10 = pivot["p10"].tolist()
         p90 = pivot["p90"].tolist()
@@ -102,7 +112,7 @@ def build_seasonality_chart(
             name       = "10–90th %ile",
         ))
 
-    # ── 2. Historical year lines (non-highlighted, drawn first) ───────────────
+    # ── 2. Historical year lines ──────────────────────────────────────────────
     for year in year_cols:
         if year == highlight_year:
             continue
@@ -136,7 +146,7 @@ def build_seasonality_chart(
                 hovertemplate = "<b>Average</b>: %{y:.2f}<extra></extra>",
             ))
 
-    # ── 4. Current/highlighted year (drawn last so it's always on top) ────────
+    # ── 4. Current/highlighted year ───────────────────────────────────────────
     if highlight_year in year_cols:
         series = pivot[highlight_year].dropna()
         if not series.empty:
@@ -153,12 +163,10 @@ def build_seasonality_chart(
             ))
 
     # ── 5. Layout ─────────────────────────────────────────────────────────────
-    # Space x-axis ticks evenly — aim for ~18 visible labels.
     n_total = len(x_labels)
     step    = max(1, n_total // 18)
     tick_vals = x_labels[::step]
 
-    # Zero reference line
     all_values = []
     for col in year_cols:
         if col in pivot.columns:
@@ -167,37 +175,37 @@ def build_seasonality_chart(
     fig.update_layout(
         title = dict(
             text = f"{commodity} {spread_name} Spread Seasonality",
-            font = dict(size=14, color="#FFFFFF", family="Arial"),
+            font = dict(size=14, color=_TITLE_FG, family="Arial"),
             x    = 0.5,
             y    = 0.97,
         ),
-        paper_bgcolor = "#000000",
-        plot_bgcolor  = "#000000",
-        font          = dict(color="#BBBBBB", size=11, family="Arial"),
+        paper_bgcolor = _PAPER_BG,
+        plot_bgcolor  = _PLOT_BG,
+        font          = dict(color=_FONT_FG, size=11, family="Arial"),
 
         xaxis = dict(
-            title         = dict(text="Date (MM-DD)", font=dict(size=14, color="#AAAAAA")),
+            title         = dict(text="Date (MM-DD)", font=dict(size=14, color=_TICK_FG)),
             type          = "category",
             categoryorder = "array",
             categoryarray = x_labels,
             tickangle     = -45,
             tickvals      = tick_vals,
             ticktext      = tick_vals,
-            tickfont      = dict(size=11, color="#AAAAAA"),
-            gridcolor     = "#1A1A1A",
+            tickfont      = dict(size=11, color=_TICK_FG),
+            gridcolor     = _GRID,
             gridwidth     = 1,
-            linecolor     = "#333333",
+            linecolor     = _AXIS_LINE,
             showline      = True,
         ),
         yaxis = dict(
-            title       = dict(text=f"Spread ({unit})", font=dict(size=14, color="#AAAAAA")),
-            tickfont    = dict(size=12, color="#AAAAAA"),
-            gridcolor   = "#1A1A1A",
+            title       = dict(text=f"Spread ({unit})", font=dict(size=14, color=_TICK_FG)),
+            tickfont    = dict(size=12, color=_TICK_FG),
+            gridcolor   = _GRID,
             gridwidth   = 1,
-            linecolor   = "#333333",
+            linecolor   = _AXIS_LINE,
             showline    = True,
             zeroline    = True,
-            zerolinecolor = "#2A2A2A",
+            zerolinecolor = _ZERO_LINE,
             zerolinewidth = 1.5,
         ),
         legend = dict(
@@ -205,17 +213,17 @@ def build_seasonality_chart(
             y           = 1.0,
             xanchor     = "left",
             yanchor     = "top",
-            bgcolor     = "rgba(0, 0, 0, 0.75)",
-            bordercolor = "#333333",
+            bgcolor     = _LEGEND_BG,
+            bordercolor = _AXIS_LINE,
             borderwidth = 1,
-            font        = dict(size=12, color="#CCCCCC"),
+            font        = dict(size=12, color=_FONT_FG),
             traceorder  = "normal",
         ),
         hovermode = "x unified",
         hoverlabel = dict(
-            bgcolor   = "rgba(0,0,0,0.85)",
-            bordercolor = "#444444",
-            font      = dict(size=11, color="#FFFFFF"),
+            bgcolor   = _HOVER_BG,
+            bordercolor = _HOVER_BRD,
+            font      = dict(size=11, color=_TITLE_FG),
         ),
         height  = 580,
         margin  = dict(l=70, r=140, t=60, b=90),

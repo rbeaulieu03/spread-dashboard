@@ -38,9 +38,9 @@ _YEAR_COLORS = [
     "#FF8C00",   # dark orange
     "#DC143C",   # crimson red
 ]
-_CURRENT_COLOR  = "#00FFFF"   # bright cyan — most recent year
-_AVERAGE_COLOR  = "#FFFFFF"   # white dashed
-_BAND_COLOR     = "rgba(255, 255, 255, 0.18)"
+_CURRENT_COLOR  = "#0891B2"   # deep cyan — most recent year (light-theme readable)
+_AVERAGE_COLOR  = "#374151"   # dark slate dashed
+_BAND_COLOR     = "rgba(31, 41, 55, 0.08)"
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -51,8 +51,6 @@ with st.sidebar:
     commodities = get_iv_commodities()
     commodity   = st.selectbox("Commodity", commodities)
 
-    # Year range — inferred from available data after load,
-    # but provide defaults based on current year
     current_year    = date.today().year
     available_years = list(range(current_year - 5, current_year + 1))
 
@@ -112,11 +110,9 @@ if not selected_valid:
 highlight_year  = max(selected_valid)
 x_labels        = pivot.index.tolist()
 
-# Thin x-axis ticks to ~18 labels
 step      = max(1, len(x_labels) // 18)
 tick_vals = x_labels[::step]
 
-# Color assignment
 non_highlight = [y for y in selected_valid if y != highlight_year]
 color_map     = {}
 for i, yr in enumerate(non_highlight):
@@ -183,39 +179,39 @@ if highlight_year in year_cols:
             hovertemplate = f"<b>{highlight_year}</b>: %{{y:.2f}}%<extra></extra>",
         ))
 
-# 5. Layout
+# 5. Layout — light theme
 fig.update_layout(
     title = dict(
         text = chart_title,
-        font = dict(size=14, color="#FFFFFF", family="Arial"),
+        font = dict(size=14, color="#111827", family="Arial"),
         x    = 0.5,
         y    = 0.97,
     ),
-    paper_bgcolor = "#000000",
-    plot_bgcolor  = "#000000",
-    font          = dict(color="#BBBBBB", size=11, family="Arial"),
+    paper_bgcolor = "#FFFFFF",
+    plot_bgcolor  = "#FFFFFF",
+    font          = dict(color="#374151", size=11, family="Arial"),
 
     xaxis = dict(
-        title         = dict(text="Date (MM-DD)", font=dict(size=14, color="#AAAAAA")),
+        title         = dict(text="Date (MM-DD)", font=dict(size=14, color="#6B7280")),
         type          = "category",
         categoryorder = "array",
         categoryarray = x_labels,
         tickangle     = -45,
         tickvals      = tick_vals,
         ticktext      = tick_vals,
-        tickfont      = dict(size=11, color="#AAAAAA"),
-        gridcolor     = "#1A1A1A",
+        tickfont      = dict(size=11, color="#6B7280"),
+        gridcolor     = "#E5E7EB",
         gridwidth     = 1,
-        linecolor     = "#333333",
+        linecolor     = "#D1D5DB",
         showline      = True,
     ),
     yaxis = dict(
-        title         = dict(text="Implied Volatility (%)", font=dict(size=14, color="#AAAAAA")),
-        tickfont      = dict(size=12, color="#AAAAAA"),
+        title         = dict(text="Implied Volatility (%)", font=dict(size=14, color="#6B7280")),
+        tickfont      = dict(size=12, color="#6B7280"),
         ticksuffix    = "%",
-        gridcolor     = "#1A1A1A",
+        gridcolor     = "#E5E7EB",
         gridwidth     = 1,
-        linecolor     = "#333333",
+        linecolor     = "#D1D5DB",
         showline      = True,
         zeroline      = False,
     ),
@@ -224,16 +220,16 @@ fig.update_layout(
         y           = 1.0,
         xanchor     = "left",
         yanchor     = "top",
-        bgcolor     = "rgba(0, 0, 0, 0.75)",
-        bordercolor = "#333333",
+        bgcolor     = "rgba(255,255,255,0.85)",
+        bordercolor = "#D1D5DB",
         borderwidth = 1,
-        font        = dict(size=12, color="#CCCCCC"),
+        font        = dict(size=12, color="#374151"),
     ),
     hovermode  = "x unified",
     hoverlabel = dict(
-        bgcolor     = "rgba(0,0,0,0.85)",
-        bordercolor = "#444444",
-        font        = dict(size=11, color="#FFFFFF"),
+        bgcolor     = "rgba(255,255,255,0.95)",
+        bordercolor = "#D1D5DB",
+        font        = dict(size=11, color="#111827"),
     ),
     height = 580,
     margin = dict(l=70, r=140, t=60, b=90),

@@ -33,20 +33,22 @@ from src.providers.excel import load_commodity_file
 # ── Page setup ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Livestock", page_icon="🐄", layout="wide")
 
-# ── Dark theme ────────────────────────────────────────────────────────────────
-_BG         = "#000000"
-_PLOT_BG    = "#000000"
-_GRID       = "#1A1A1A"
-_LINE       = "#333333"
-_FONT_COLOR = "#BBBBBB"
-_TICK_COLOR = "#AAAAAA"
-_LEGEND_BG  = "rgba(0,0,0,0.75)"
-_HOVER_BG   = "rgba(0,0,0,0.85)"
+# ── Light theme ───────────────────────────────────────────────────────────────
+_BG         = "#FFFFFF"
+_PLOT_BG    = "#FFFFFF"
+_GRID       = "#E5E7EB"
+_LINE       = "#D1D5DB"
+_FONT_COLOR = "#374151"
+_TICK_COLOR = "#6B7280"
+_TITLE_FG   = "#111827"
+_LEGEND_BG  = "rgba(255,255,255,0.85)"
+_HOVER_BG   = "rgba(255,255,255,0.95)"
+_ZERO_LINE  = "#D1D5DB"
 
-_COLOR_5AREA    = "#FFFFFF"
+_COLOR_5AREA    = "#374151"   # dark slate (was white)
 _COLOR_KANSAS   = "#FF8C00"
 _COLOR_NEBRASKA = "#4CAF7D"
-_COLOR_FUTURES  = "#00FFFF"
+_COLOR_FUTURES  = "#0891B2"   # deep cyan (was bright cyan)
 
 _LAYOUT_BASE = dict(
     paper_bgcolor = _BG,
@@ -55,10 +57,10 @@ _LAYOUT_BASE = dict(
     legend        = dict(
         x=1.01, y=1.0, xanchor="left", yanchor="top",
         bgcolor=_LEGEND_BG, bordercolor=_LINE, borderwidth=1,
-        font=dict(size=12, color="#CCCCCC"),
+        font=dict(size=12, color=_FONT_COLOR),
     ),
-    hoverlabel = dict(bgcolor=_HOVER_BG, bordercolor="#444444",
-                      font=dict(size=11, color="#FFFFFF")),
+    hoverlabel = dict(bgcolor=_HOVER_BG, bordercolor=_LINE,
+                      font=dict(size=11, color=_TITLE_FG)),
 )
 
 # Reusable axis style helpers — applied via update_xaxes / update_yaxes
@@ -135,7 +137,7 @@ if show_futures:
             front_sym = min(active, key=lambda s: active[s])
             price = combined.loc[idx_date, front_sym]
             if pd.notna(price):
-                front_prices[idx_date] = price  # ProphetX LC is cents/lb = $/cwt (1 cwt = 100 lbs, 100 cents = $1)
+                front_prices[idx_date] = price
 
         futures_friday = pd.Series(front_prices, name="futures").sort_index()
 
@@ -216,7 +218,7 @@ with tab_cash:
     fig.update_layout(
         **_LAYOUT_BASE,
         title=dict(text="Fed Cattle Weekly Cash Prices ($/cwt) — All Grades",
-                   font=dict(size=14, color="#FFFFFF", family="Arial"), x=0.5, y=0.97),
+                   font=dict(size=14, color=_TITLE_FG, family="Arial"), x=0.5, y=0.97),
         hovermode="x unified",
         height=540,
         margin=dict(l=80, r=200, t=60, b=70),
@@ -230,7 +232,6 @@ with tab_cash:
                      gridcolor=_GRID, linecolor=_LINE, showline=True)
     st.plotly_chart(fig, use_container_width=True)
 
-    # Latest price metrics
     c1, c2, c3, c4 = st.columns(4)
 
     def _metric(col_obj, label, price_col):
@@ -259,7 +260,6 @@ with tab_cash:
             delta=f"{fv - fp:+.2f}" if fp is not None else None,
         )
 
-    # Volume table
     st.divider()
     st.subheader("Weekly Volume (Head) — Live FOB")
     vol_map = {"5 Area": "head_live_fob_5area",
@@ -309,21 +309,21 @@ with tab_spread:
             marker_color=bar_colors,
             hovertemplate="<b>NE − KS</b>: $%{y:+.2f}/cwt<br>%{x|%b %d, %Y}<extra></extra>",
         ))
-        fig_spread.add_hline(y=0, line_width=1, line_color="#444444", line_dash="dash")
+        fig_spread.add_hline(y=0, line_width=1, line_color=_LINE, line_dash="dash")
 
         if len(spread) >= 4:
             rolling = spread.rolling(4).mean().dropna()
             fig_spread.add_trace(go.Scatter(
                 x=rolling.index, y=rolling.values,
                 mode="lines", name="4-Week Avg",
-                line=dict(color="#FFFFFF", width=1.8, dash="dot"),
+                line=dict(color=_TITLE_FG, width=1.8, dash="dot"),
                 hovertemplate="<b>4-Wk Avg</b>: $%{y:+.2f}/cwt<br>%{x|%b %d, %Y}<extra></extra>",
             ))
 
         fig_spread.update_layout(
             **_LAYOUT_BASE,
             title=dict(text="Nebraska − Kansas Weekly Cash Spread ($/cwt) — Live FOB",
-                       font=dict(size=14, color="#FFFFFF", family="Arial"), x=0.5, y=0.97),
+                       font=dict(size=14, color=_TITLE_FG, family="Arial"), x=0.5, y=0.97),
             hovermode="x unified",
             height=500,
             margin=dict(l=80, r=160, t=60, b=70),
@@ -334,7 +334,7 @@ with tab_spread:
             tickfont=dict(size=11, color=_TICK_COLOR),
             gridcolor=_GRID, linecolor=_LINE,
             showline=True, zeroline=True,
-            zerolinecolor="#2A2A2A", zerolinewidth=1.5, tickprefix="$")
+            zerolinecolor=_ZERO_LINE, zerolinewidth=1.5, tickprefix="$")
         fig_spread.update_xaxes(
             title=dict(text="Week Ending Date", font=dict(size=13, color=_TICK_COLOR)),
             tickfont=dict(size=11, color=_TICK_COLOR),
