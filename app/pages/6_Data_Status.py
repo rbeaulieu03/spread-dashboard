@@ -1,11 +1,12 @@
 """
-5_Data_Status.py
+6_Data_Status.py
 ----------------
-Unified data status and diagnostics page covering all three data sources:
+Unified data status and diagnostics page covering all four data sources:
 
   1. ProphetX Excel   — per-commodity contract files in data/prophetx/
   2. Bloomberg Excel  — implied volatility files in data/bloomberg/
   3. CFTC COT         — auto-fetched from CFTC public website
+  4. NWS Weather      — auto-fetched from api.weather.gov
 
 Run this page any time a chart shows no data or unexpected gaps.
 Each section tells you exactly what is loaded, what is missing,
@@ -25,6 +26,11 @@ from src.config            import load_spreads_config, get_commodity_names, get_
 from src.providers.excel   import load_commodity_file, build_prophetx_symbol
 from src.providers.iv      import load_iv_data, get_iv_commodities, get_iv_label
 from src.providers.cot     import fetch_cot_data, get_commodity_timeseries, COT_COMMODITIES
+from src.providers.weather import (
+    GRAIN_LOCATIONS,
+    LIVESTOCK_LOCATIONS,
+    fetch_location_forecast,
+)
 
 # ── Page setup ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -52,11 +58,11 @@ def _fmt_int(v):
 def _color_status(row):
     s = row.get("Status", "")
     if "✅" in str(s):
-        return ["background-color: #0d2b0d"] * len(row)
+        return ["background-color: #DCFCE7"] * len(row)   # light green
     if "❌" in str(s):
-        return ["background-color: #2b0d0d"] * len(row)
+        return ["background-color: #FEE2E2"] * len(row)   # light red
     if "⚠️" in str(s):
-        return ["background-color: #2b2200"] * len(row)
+        return ["background-color: #FEF3C7"] * len(row)   # light amber
     return [""] * len(row)
 
 current_year = date.today().year
@@ -457,11 +463,12 @@ with st.expander("🌾 CFTC COT Data  —  Auto-Fetched from CFTC Website", expa
     else:
         st.info("Click **▶️ Run COT Check** to validate the CFTC data fetch.")
 
+
     with st.container():
         st.markdown("""
         **If a commodity shows ❌ NOT MATCHED:**
         1. Download the current year's zip manually from:
-           `https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip`
+           `https://www.cftc.gov/files/dea/history/com_disagg_txt_{year}.zip`
         2. Open the CSV and search the `Market_and_Exchange_Names` column
         3. Copy the exact string and paste it into the `cftc_name` field
            for that commodity in `src/providers/cot.py`
@@ -474,4 +481,119 @@ with st.expander("🌾 CFTC COT Data  —  Auto-Fetched from CFTC Website", expa
 
         **Cache note:** COT data is cached for 6 hours. To force a refresh,
         restart the Streamlit app.
+        """)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 4 — NWS Weather Auto-Fetch
+# ══════════════════════════════════════════════════════════════════════════════
+with st.expander("🌤️ NWS Weather Forecasts  —  Auto-Fetched from api.weather.gov", expanded=True):
+
+    st.markdown(
+        "7-day point forecasts are pulled from the National Weather Service "
+        "(api.weather.gov) for every location in `GRAIN_LOCATIONS` and "
+        "`LIVESTOCK_LOCATIONS` (defined in `src/providers/weather.py`). "
+        "No auth is needed — NWS just requires a polite User-Agent header. "
+        "Grid lookups cache for 12 hours and forecasts for 1 hour."
+    )
+
+    wx_scope = st.selectbox(
+        "Locations to probe",
+        options = ["All", "Grain Belt only", "Livestock only"],
+        index   = 0,
+        key     = "wx_scope",
+    )
+
+    if st.button("▶️ Run Weather Check", type="primary", key="run_wx"):
+
+        scopes_to_check = []
+        if wx_scope in ("All", "Grain Belt only"):
+            scopes_to_check.append(("Grain Belt", GRAIN_LOCATIONS))
+        if wx_scope in ("All", "Livestock only"):
+            scopes_to_check.append(("Livestock", LIVESTOCK_LOCATIONS))
+
+        all_rows = []
+        all_ok   = 0
+        all_fail = 0
+
+        for scope_label, locations in scopes_to_check:
+            with st.spinner(f"Fetching {scope_label} forecasts from NWS…"):
+                for name, meta in locations.items():
+                    df, msg = fetch_location_forecast(name, meta["lat"], meta["lon"])
+                    if not df.empty:
+                        all_ok += 1
+                        first_date = df["date"].iloc[0]
+                        last_date  = df["date"].iloc[-1]
+                        all_rows.append({
+                            "Scope":       scope_label,
+                            "Location":    name,
+                            "Region":      meta["region"],
+                            "Lat/Lon":     f"{meta['lat']:.3f}, {meta['lon']:.3f}",
+                            "Status":      "✅ OK",
+                            "Days":        len(df),
+                            "Date Range":  f"{first_date} → {last_date}",
+                            "Detail":      msg,
+                        })
+                    else:
+                        all_fail += 1
+                        all_rows.append({
+                            "Scope":       scope_label,
+                            "Location":    name,
+                            "Region":      meta["region"],
+                            "Lat/Lon":     f"{meta['lat']:.3f}, {meta['lon']:.3f}",
+                            "Status":      "❌ FAILED",
+                            "Days":        0,
+                            "Date Range":  "—",
+                            "Detail":      msg,
+                        })
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Locations OK",     all_ok)
+        c2.metric("Locations Failed", all_fail,
+                  delta="None" if all_fail == 0 else f"{all_fail} need attention",
+                  delta_color="normal" if all_fail == 0 else "inverse")
+        c3.metric("Total Checked",    all_ok + all_fail)
+
+        if all_fail:
+            st.warning(
+                f"⚠️ {all_fail} location(s) failed to load. "
+                "See the Detail column for the NWS error message — "
+                "most commonly a transient 5xx from api.weather.gov."
+            )
+
+        st.divider()
+        st.markdown("##### Per-Location Status")
+        df_wx = pd.DataFrame(all_rows)
+        st.dataframe(
+            df_wx.style.apply(_color_status, axis=1),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+        st.info("Click **▶️ Run Weather Check** to validate the NWS data fetch.")
+
+    with st.container():
+        st.markdown("""
+        **If a location shows ❌ FAILED:**
+        1. Open https://api.weather.gov/points/{lat},{lon} in a browser using
+           that location's coordinates. If it returns 404, the lat/lon is
+           outside the NWS coverage area (CONUS, Alaska, Hawaii, PR).
+        2. If it returns 5xx, the NWS API is temporarily down — retry in a
+           few minutes.
+        3. If it returns 200 but the dashboard still fails, check that the
+           User-Agent string in `src/providers/weather.py` is descriptive
+           (NWS blocks generic clients).
+
+        **To add or remove locations:** edit `GRAIN_LOCATIONS` or
+        `LIVESTOCK_LOCATIONS` in `src/providers/weather.py`. If you add a
+        new location, also add its monthly climate normals to
+        `_CLIMATE_NORMALS` in the same file so the anomaly column populates.
+
+        **Cache note:** Grid lookups cache for 12 hours and forecasts for 1
+        hour. To force an immediate refresh, restart the Streamlit app.
+
+        **Future:** swap or supplement with the Tyson Weather Desk feed by
+        adding a parallel provider that returns the same DataFrame shape
+        (date, tmax_f, tmin_f, precip_prob_max, short_forecast).
         """)
