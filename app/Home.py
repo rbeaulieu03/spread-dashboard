@@ -16,35 +16,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 
 st.set_page_config(
-    page_title  = "Spread Dashboard",
+    page_title  = "Trader Insight Dashboard",
     page_icon   = "📊",
     layout      = "wide",
     initial_sidebar_state = "expanded",
 )
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.title("📊 Spread Seasonality Dashboard")
+st.title("📊 Trader Insight Dashboard")
 st.markdown("---")
 
 # ── Description ───────────────────────────────────────────────────────────────
 st.markdown("""
 ### Welcome
 
-This dashboard shows **spread seasonality** for key commodity futures markets.
+This dashboard shows **trader insights** for key commodity futures markets.
 
-Use it to see how a spread (the price difference between two contract months)
-has behaved historically at this time of year, and where the current year
-sits relative to prior seasons.
-
----
-
-### How to use it
-
-1. Click **Seasonality** in the left sidebar to open the chart page.
-2. In the sidebar controls, pick your **Commodity** and **Spread**.
-3. Toggle years, the average line, and the percentile band on or off.
-4. Hover over the chart to see exact values for each year.
-5. Use the **Download CSV** button to pull the underlying data into Excel.
+Use it to see different data points to do with commodity derivatives and fundamentals.
 
 ---
 

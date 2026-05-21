@@ -115,7 +115,7 @@ with st.sidebar:
     cat_filter = st.selectbox("Category Filter", options=categories)
 
     st.divider()
-    st.caption("Source: CFTC Disaggregated Futures-Only Report")
+    st.caption("Source: CFTC Disaggregated Futures-and-Options-Combined Report")
     st.caption("Released: Fridays 3:30 PM ET (as of prior Tuesday)")
     st.caption("Auto-refreshes every 6 hours — no manual export needed.")
 
@@ -124,7 +124,7 @@ with st.sidebar:
 with st.spinner("Fetching CFTC COT data…"):
     cot_df, cot_status = fetch_cot_data(lookback_years=lookback_years)
 
-st.title("🌾 COT Dashboard — Disaggregated Futures")
+st.title("🌾 COT Dashboard — Disaggregated Futures & Options")
 
 if cot_df.empty:
     st.error(f"Could not load COT data. Detail: {cot_status}")
