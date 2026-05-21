@@ -1,7 +1,7 @@
 """
-6_Weather.py
+5_Weather.py
 ------------
-Weather dashboard — 7-day NWS point forecasts for commodity-relevant
+Weather dashboard — 7-day point forecasts for commodity-relevant
 regions, split into Grain Belt and Livestock tabs.
 
 Each location shows:
@@ -10,12 +10,15 @@ Each location shows:
   • Anomaly metrics: avg forecast temp vs the monthly climate normal,
     and avg precip-chance for context against the monthly normal precip.
 
-Data source: api.weather.gov (no auth required).  CPC 6-10 and 8-14 day
-outlook maps are embedded at the bottom of each tab as a forward-look
-overlay.
+Data sources (used together, not interchangeably):
+  • National Weather Service (api.weather.gov) — free, no auth.
+    Drives the Grain Belt and Livestock tabs (per-location 7-day forecasts).
+  • Tyson Weather Desk (xweather) — Tyson's paid subscription.
+    Drives the "Maps" tab (regional forecast/observed/drought/imagery PNGs).
+    Requires credentials in .streamlit/secrets.toml under [weather_desk].
 
-Future: when the Tyson weather desk subscription is wired in, add a
-source toggle in the sidebar to switch between NWS and Tyson Desk.
+CPC 6-10 and 8-14 day outlook maps are embedded at the bottom of the
+NWS tabs as a public-data forward-look overlay.
 """
 
 import sys
@@ -34,6 +37,7 @@ from src.providers.weather import (
     fetch_all_forecasts,
     compute_anomaly,
 )
+from src.providers import weather_desk as wdesk
 
 
 # ── Page setup ────────────────────────────────────────────────────────────────
@@ -72,13 +76,16 @@ _LAYOUT_BASE = dict(
 with st.sidebar:
     st.header("Controls")
     st.divider()
-    st.caption("Source: National Weather Service (api.weather.gov)")
-    st.caption("Refreshes hourly per location.")
+    st.caption("**Per-location forecasts**")
+    st.caption("National Weather Service (api.weather.gov) — refreshes hourly.")
     st.caption("")
-    st.caption(
-        "Future: switch to the Tyson Weather Desk feed once its endpoint "
-        "details are documented in `src/providers/weather.py`."
-    )
+    st.caption("**Regional maps**")
+    if wdesk.has_credentials():
+        st.caption("Tyson Weather Desk — credentials loaded ✅")
+    else:
+        st.caption("Tyson Weather Desk — credentials missing ❌")
+        st.caption("Add a `[weather_desk]` section with `username` and "
+                   "`password` to `.streamlit/secrets.toml` to enable the Maps tab.")
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("🌤️ Weather — 7-Day Forecasts")
@@ -263,7 +270,9 @@ def _render_tab(locations: dict, label: str, cpc_caption: str):
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_grain, tab_livestock = st.tabs(["🌾 Grain Belt", "🐄 Livestock"])
+tab_grain, tab_livestock, tab_maps = st.tabs([
+    "🌾 Grain Belt", "🐄 Livestock", "🗺️ Maps (Weather Desk)",
+])
 
 with tab_grain:
     _render_tab(
@@ -272,9 +281,72 @@ with tab_grain:
         "Watch the Corn Belt and Plains states for crop-development implications.",
     )
 
+
 with tab_livestock:
     _render_tab(
         LIVESTOCK_LOCATIONS, "Livestock",
         "Watch Plains-states heat anomalies for cattle stress and transport "
         "disruptions, and Southern/Midwest precip for plant operations.",
     )
+
+with tab_maps:
+    st.subheader("Tyson Weather Desk — Regional Maps")
+    st.caption(
+        "PNG maps from Tyson's xweather subscription. "
+        "Pick a category, a parameter, and a region — the most recent "
+        "available image is displayed."
+    )
+
+    if not wdesk.has_credentials():
+        st.error(
+            "Weather Desk credentials missing. Add a `[weather_desk]` "
+            "section to `.streamlit/secrets.toml` with `username` and "
+            "`password` to enable this tab."
+        )
+        st.code(
+            '[weather_desk]\nusername = "your-username"\npassword = "your-password"\n',
+            language="toml",
+        )
+    else:
+        c1, c2, c3 = st.columns([2, 2, 1])
+        with c1:
+            category = st.selectbox(
+                "Category",
+                options = list(wdesk.IMAGE_PARAMS.keys()),
+                index   = 1,
+                key     = "wd_category",
+            )
+        with c2:
+            param_choices = wdesk.IMAGE_PARAMS[category]
+            param_label   = st.selectbox(
+                "Parameter",
+                options = list(param_choices.keys()),
+                key     = "wd_param",
+            )
+        with c3:
+            region_label = st.selectbox(
+                "Region",
+                options = list(wdesk.IMAGE_REGIONS.keys()),
+                index   = 0,
+                key     = "wd_region",
+            )
+
+        param_code  = param_choices[param_label]
+        region_code = wdesk.IMAGE_REGIONS[region_label]
+
+        with st.spinner(f"Fetching {param_label} ({region_label}) from Weather Desk…"):
+            url, msg = wdesk.get_latest_image_url(param_code, region_code)
+
+        if url:
+            st.success(msg)
+            st.image(url, caption=f"{param_label} — {region_label}",
+                     use_container_width=True)
+        else:
+            st.error(msg)
+
+        st.divider()
+        st.caption(
+            "Rate limit: 10 requests/min per account. The list endpoint is "
+            "cached for 30 minutes — change the dropdowns to query a new "
+            "param/region without hitting the cap."
+        )

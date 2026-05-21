@@ -1,12 +1,13 @@
 """
 6_Data_Status.py
 ----------------
-Unified data status and diagnostics page covering all four data sources:
+Unified data status and diagnostics page covering all five data sources:
 
-  1. ProphetX Excel   — per-commodity contract files in data/prophetx/
-  2. Bloomberg Excel  — implied volatility files in data/bloomberg/
-  3. CFTC COT         — auto-fetched from CFTC public website
-  4. NWS Weather      — auto-fetched from api.weather.gov
+  1. ProphetX Excel        — per-commodity contract files in data/prophetx/
+  2. Bloomberg Excel       — implied volatility files in data/bloomberg/
+  3. CFTC COT              — auto-fetched from CFTC public website
+  4. NWS Weather           — auto-fetched from api.weather.gov
+  5. Tyson Weather Desk    — xweather Images API (regional PNG maps)
 
 Run this page any time a chart shows no data or unexpected gaps.
 Each section tells you exactly what is loaded, what is missing,
@@ -31,6 +32,7 @@ from src.providers.weather import (
     LIVESTOCK_LOCATIONS,
     fetch_location_forecast,
 )
+from src.providers import weather_desk as wdesk
 
 # ── Page setup ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -593,7 +595,88 @@ with st.expander("🌤️ NWS Weather Forecasts  —  Auto-Fetched from api.weat
         **Cache note:** Grid lookups cache for 12 hours and forecasts for 1
         hour. To force an immediate refresh, restart the Streamlit app.
 
-        **Future:** swap or supplement with the Tyson Weather Desk feed by
-        adding a parallel provider that returns the same DataFrame shape
-        (date, tmax_f, tmin_f, precip_prob_max, short_forecast).
+        hour. To force an immediate refresh, restart the Streamlit app.
+
+        **Tyson Weather Desk:** the xweather subscription is wired in
+        Section 5 below — it provides regional PNG maps rather than
+        per-location numeric forecasts, so it complements rather than
+        replaces NWS.
+        """)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 5 — Tyson Weather Desk (xweather Images API)
+# ══════════════════════════════════════════════════════════════════════════════
+with st.expander("🗺️ Tyson Weather Desk  —  Regional Image API", expanded=True):
+
+    st.markdown(
+        "Tyson's xweather subscription returns PNG map URLs for the US "
+        "(and regional subsets) covering forecast Tmax/Tmin/Precip, "
+        "observed Tmax/Tmin/Precip, drought, radar, and satellite. "
+        "Used by the **Maps** tab on the Weather page. "
+        "Credentials live in `.streamlit/secrets.toml` under `[weather_desk]`."
+    )
+
+    if not wdesk.has_credentials():
+        st.error(
+            "❌ Weather Desk credentials are NOT configured. "
+            "Add a `[weather_desk]` section with `username` and `password` to "
+            "`.streamlit/secrets.toml`."
+        )
+        st.code(
+            '[weather_desk]\nusername = "your-username"\npassword = "your-password"\n',
+            language="toml",
+        )
+    else:
+        st.success("✅ Weather Desk credentials are present in secrets.toml.")
+
+    if st.button("▶️ Run Weather Desk Check", type="primary", key="run_wd"):
+        if not wdesk.has_credentials():
+            st.error(
+                "Cannot probe — credentials missing. See instructions above."
+            )
+        else:
+            # Probe one cheap param/region to confirm auth + connectivity.
+            with st.spinner("Probing Weather Desk Images API…"):
+                url, msg = wdesk.get_latest_image_url("satvis", "USUS")
+
+            if url:
+                st.success(f"✅ {msg}")
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    st.markdown("**Probe details**")
+                    st.caption("• Param: `satvis` (Visible satellite)")
+                    st.caption("• Region: `USUS` (United States)")
+                    st.caption("• Limit: 1 (most recent)")
+                    st.caption(f"• URL: `{url}`")
+                with c2:
+                    st.image(url, caption="Latest visible satellite",
+                             use_container_width=True)
+            else:
+                st.error(f"❌ {msg}")
+                st.caption(
+                    "Common causes: wrong username/password, expired "
+                    "subscription, or temporary xweather outage. "
+                    "Retry in a few minutes before assuming a config issue."
+                )
+
+    else:
+        st.info("Click **▶️ Run Weather Desk Check** to validate the xweather subscription.")
+
+    with st.container():
+        st.markdown("""
+        **If the probe shows ❌ HTTP 401 / 403:**
+        - Credentials in `secrets.toml` are wrong or the account is locked.
+        - Verify by signing in directly to the Weather Desk web UI.
+
+        **If the probe shows ❌ HTTP 429:**
+        - You've exceeded 10 requests/minute. The provider caches list
+          results for 30 minutes, so this usually only happens during
+          rapid manual debugging.
+
+        **If the probe shows ❌ HTTP 5xx:**
+        - xweather backend is having a moment. Retry in a few minutes.
+
+        **Documentation:**
+        See `api.weatherdesk.xweather.com/<tenant>/documentation/realtime/v1/main`.
         """)
