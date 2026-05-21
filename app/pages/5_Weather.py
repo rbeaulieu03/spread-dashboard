@@ -334,34 +334,13 @@ with tab_maps:
         param_code  = param_choices[param_label]
         region_code = wdesk.IMAGE_REGIONS[region_label]
 
-        overlay = st.checkbox(
-            "🏭 Show Tyson plant overlay",
-            value = False,
-            key   = "wd_overlay",
-            help  = (
-                "Render the map as an interactive Plotly figure with "
-                "Tyson plant markers placed at their lat/lon. Alignment "
-                "is approximate (xweather uses Lambert Conformal Conic; "
-                "we treat the image as roughly equirectangular). Adjust "
-                "REGION_BOUNDS in src/providers/weather_desk.py if "
-                "markers drift visibly."
-            ),
-        )
-
         with st.spinner(f"Fetching {param_label} ({region_label}) from Weather Desk…"):
             url, msg = wdesk.get_latest_image_url(param_code, region_code)
 
         if url:
             st.success(msg)
-            if overlay:
-                fig = wdesk.build_image_overlay_figure(url, region_code)
-                st.plotly_chart(fig, use_container_width=True)
-                st.caption(
-                    f"{param_label} — {region_label}  ·  with Tyson plant overlay"
-                )
-            else:
-                st.image(url, caption=f"{param_label} — {region_label}",
-                         use_container_width=True)
+            st.image(url, caption=f"{param_label} — {region_label}",
+                     use_container_width=True)
         else:
             st.error(msg)
 
