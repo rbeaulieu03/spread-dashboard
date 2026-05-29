@@ -38,6 +38,7 @@ from src.providers.weather import (
     compute_anomaly,
 )
 from src.providers import weather_desk as wdesk
+from src.providers import noaa
 
 
 # ── Page setup ────────────────────────────────────────────────────────────────
@@ -270,8 +271,8 @@ def _render_tab(locations: dict, label: str, cpc_caption: str):
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_grain, tab_livestock, tab_maps = st.tabs([
-    "🌾 Grain Belt", "🐄 Livestock", "🗺️ Maps (Weather Desk)",
+tab_grain, tab_livestock, tab_maps, tab_noaa = st.tabs([
+    "🌾 Grain Belt", "🐄 Livestock", "🗺️ Maps (Weather Desk)", "🌎 NOAA Macro",
 ])
 
 with tab_grain:
@@ -344,9 +345,127 @@ with tab_maps:
         else:
             st.error(msg)
 
+
         st.divider()
         st.caption(
             "Rate limit: 10 requests/min per account. The list endpoint is "
             "cached for 30 minutes — change the dropdowns to query a new "
             "param/region without hitting the cap."
         )
+
+
+with tab_noaa:
+    st.subheader("NOAA Macro — Severe Weather, Drought, Climate Snapshot")
+    st.caption(
+        "Public NOAA data at a glance. Updates: SPC outlooks throughout "
+        "the day, US Drought Monitor weekly on Thursday mornings, NCEI "
+        "Climate at a Glance monthly."
+    )
+
+    # ── Section 1: SPC Severe Weather Outlooks ────────────────────────
+    st.markdown("##### 🌪️ Storm Prediction Center — Severe Weather Outlooks")
+    st.caption(
+        "Categorical convective outlooks (Marginal → Slight → Enhanced → "
+        "Moderate → High risk). Day 1–3 update several times daily; "
+        "Day 4–8 is a smoothed 30 %-or-greater probability map."
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Day 1**")
+        st.image(noaa.SPC_OUTLOOKS["Day 1 — Categorical"],
+                 use_container_width=True)
+    with c2:
+        st.markdown("**Day 2**")
+        st.image(noaa.SPC_OUTLOOKS["Day 2 — Categorical"],
+                 use_container_width=True)
+
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown("**Day 3**")
+        st.image(noaa.SPC_OUTLOOKS["Day 3 — Categorical"],
+                 use_container_width=True)
+    with c4:
+        st.markdown("**Day 4–8 Probabilistic**")
+        st.image(noaa.SPC_OUTLOOKS["Day 4-8 — Probabilistic"],
+                 use_container_width=True)
+
+    with st.expander("Day 1 hazard-specific (tornado / hail / wind)"):
+        h1, h2, h3 = st.columns(3)
+        with h1:
+            st.markdown("**Tornado**")
+            st.image(noaa.SPC_DAY1_HAZARDS["Day 1 — Tornado"],
+                     use_container_width=True)
+        with h2:
+            st.markdown("**Hail**")
+            st.image(noaa.SPC_DAY1_HAZARDS["Day 1 — Hail"],
+                     use_container_width=True)
+        with h3:
+            st.markdown("**Wind**")
+            st.image(noaa.SPC_DAY1_HAZARDS["Day 1 — Wind"],
+                     use_container_width=True)
+
+    # ── Section 2: US Drought Monitor ────────────────────────────────
+    st.divider()
+    st.markdown("##### 🌵 US Drought Monitor (USDM)")
+    st.caption(
+        "Released every Thursday 8:30 AM ET, current as of the prior Tuesday. "
+        "Drought categories: D0 Abnormally Dry → D1 Moderate → D2 Severe → "
+        "D3 Extreme → D4 Exceptional."
+    )
+
+    st.markdown("**Current week**")
+    st.image(noaa.USDM_MAPS["Current week"], use_container_width=True)
+
+    with st.expander("Change comparisons (1 / 4 / 12 weeks ago)"):
+        cc1, cc2, cc3 = st.columns(3)
+        with cc1:
+            st.markdown("**vs 1 week ago**")
+            st.image(noaa.USDM_MAPS["Change vs 1 wk ago"],
+                     use_container_width=True)
+        with cc2:
+            st.markdown("**vs 4 weeks ago**")
+            st.image(noaa.USDM_MAPS["Change vs 4 wks ago"],
+                     use_container_width=True)
+        with cc3:
+            st.markdown("**vs 12 weeks ago**")
+            st.image(noaa.USDM_MAPS["Change vs 12 wks ago"],
+                     use_container_width=True)
+
+    # ── Section 3: NCEI Climate at a Glance ──────────────────────────
+    st.divider()
+    st.markdown("##### 🌡️ NCEI Climate at a Glance — National YTD")
+    st.caption(
+        "Contiguous-US average temperature and total precipitation "
+        "year-to-date, vs the 1901–2000 long-term average. Updated "
+        "monthly by NOAA's National Centers for Environmental Information."
+    )
+
+    with st.spinner("Fetching NCEI Climate at a Glance…"):
+        snap, msg = noaa.fetch_national_anomaly()
+
+    if snap.get("through_month"):
+        st.caption(f"Through: **{snap['through_month']}**  ·  status: {msg}")
+        m1, m2, m3, m4 = st.columns(4)
+        if snap["ytd_temp_value_f"] is not None:
+            m1.metric("YTD Avg Temp",
+                      f"{snap['ytd_temp_value_f']:.1f}°F")
+        if snap["ytd_temp_anomaly_f"] is not None:
+            m2.metric("vs 20th-c Avg",
+                      f"{snap['ytd_temp_anomaly_f']:+.1f}°F",
+                      delta=f"Rank {snap['ytd_temp_rank']}" if snap.get("ytd_temp_rank") else None)
+        if snap["ytd_precip_value_in"] is not None:
+            m3.metric("YTD Precip",
+                      f"{snap['ytd_precip_value_in']:.2f}\"")
+        if snap["ytd_precip_anomaly_in"] is not None:
+            m4.metric("vs 20th-c Avg",
+                      f"{snap['ytd_precip_anomaly_in']:+.2f}\"",
+                      delta=f"Rank {snap['ytd_precip_rank']}" if snap.get("ytd_precip_rank") else None)
+    else:
+        st.warning(f"NCEI Climate at a Glance did not return data: {msg}")
+
+    # ── Helpful external links ───────────────────────────────────────
+    st.divider()
+    st.markdown("##### 🔗 Deep dives")
+    for label, url in noaa.LINKS.items():
+        st.markdown(f"- [{label}]({url})")
