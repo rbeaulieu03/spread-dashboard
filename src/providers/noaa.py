@@ -31,18 +31,45 @@ from datetime import date
 # ── Storm Prediction Center (SPC) — convective outlooks ──────────────────────
 # Days 1-3 are the most-watched outlooks for severe weather (hail,
 # tornado, damaging wind risk).  Day 4-8 is a smoothed probability map.
+#
+# NOTE: SPC restructured their image URLs in the 2024 site refresh.  The
+# canonical "current" categorical images now live under /outlook/online/
+# rather than /outlook/.  The old paths may 404 or return cached zero-byte
+# files.  Each entry also has a "page" URL — used as a graceful fallback
+# in the UI when an image fails to load.
 SPC_OUTLOOKS = {
-    "Day 1 — Categorical":   "https://www.spc.noaa.gov/products/outlook/day1otlk.gif",
-    "Day 2 — Categorical":   "https://www.spc.noaa.gov/products/outlook/day2otlk.gif",
-    "Day 3 — Categorical":   "https://www.spc.noaa.gov/products/outlook/day3otlk.gif",
-    "Day 4-8 — Probabilistic": "https://www.spc.noaa.gov/products/exper/day4-8/day48prob.gif",
+    "Day 1 — Categorical": {
+        "image": "https://www.spc.noaa.gov/products/outlook/online/day1otlk_cat.gif",
+        "page":  "https://www.spc.noaa.gov/products/outlook/day1otlk.html",
+    },
+    "Day 2 — Categorical": {
+        "image": "https://www.spc.noaa.gov/products/outlook/online/day2otlk_cat.gif",
+        "page":  "https://www.spc.noaa.gov/products/outlook/day2otlk.html",
+    },
+    "Day 3 — Categorical": {
+        "image": "https://www.spc.noaa.gov/products/outlook/online/day3otlk_cat.gif",
+        "page":  "https://www.spc.noaa.gov/products/outlook/day3otlk.html",
+    },
+    "Day 4-8 — Probabilistic": {
+        "image": "https://www.spc.noaa.gov/products/exper/day4-8/day48prob.gif",
+        "page":  "https://www.spc.noaa.gov/products/exper/day4-8/",
+    },
 }
 
 # Per-hazard maps available on Day 1 (separate hail / wind / tornado).
 SPC_DAY1_HAZARDS = {
-    "Day 1 — Tornado":  "https://www.spc.noaa.gov/products/outlook/day1probotlk_torn.gif",
-    "Day 1 — Hail":     "https://www.spc.noaa.gov/products/outlook/day1probotlk_hail.gif",
-    "Day 1 — Wind":     "https://www.spc.noaa.gov/products/outlook/day1probotlk_wind.gif",
+    "Day 1 — Tornado": {
+        "image": "https://www.spc.noaa.gov/products/outlook/online/day1probotlk_torn.gif",
+        "page":  "https://www.spc.noaa.gov/products/outlook/day1otlk.html",
+    },
+    "Day 1 — Hail": {
+        "image": "https://www.spc.noaa.gov/products/outlook/online/day1probotlk_hail.gif",
+        "page":  "https://www.spc.noaa.gov/products/outlook/day1otlk.html",
+    },
+    "Day 1 — Wind": {
+        "image": "https://www.spc.noaa.gov/products/outlook/online/day1probotlk_wind.gif",
+        "page":  "https://www.spc.noaa.gov/products/outlook/day1otlk.html",
+    },
 }
 
 
@@ -58,19 +85,31 @@ USDM_MAPS = {
 
 
 # ── NCEI Climate at a Glance (CAG) ───────────────────────────────────────────
-# JSON endpoints for the contiguous US (national, code "110"):
-#   Parameter codes:  1 = Average Temperature, 2 = Precipitation
-#   Timescale codes:  12 = year-to-date, 1 = monthly, etc.
-# URL pattern: /cag/national/time-series/{location}/{param}/{timescale}/{start}-{end}.json
-_CAG_BASE = "https://www.ncei.noaa.gov/cag/national/time-series"
+# JSON endpoints for the contiguous US (location code 110).
+#
+# NCEI restructured the CAG API around 2024.  The current pattern uses
+# string parameter IDs and an extra "month" segment:
+#
+#   /access/monitoring/climate-at-a-glance/national/time-series/
+#       {location}/{param}/{timescale}/{base_period_end_month}/{yr_range}.json
+#
+# Where:
+#   param           — "tavg" (average temp), "pcp" (precipitation)
+#   timescale       — "ytd" for year-to-date; "12" for 12-month rolling, etc.
+#   base_period_end_month — 1-12 (e.g., 12 = data through December)
+#
+# Latest available month is whatever's published; sending base_period_end
+# = 12 returns the full year if available, or up to the most recent
+# complete month otherwise.
+_CAG_BASE = "https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/national/time-series"
 
 
-def _cag_url(param: int, year: int) -> str:
+def _cag_url(param: str, year: int, end_month: int = 12) -> str:
     """
-    Build a CAG JSON URL for national-level data for one calendar year.
-    Timescale 12 = year-to-date through the most recent complete month.
+    Build a CAG JSON URL for national-level YTD data for one calendar year.
+    `param` is "tavg" (avg temperature) or "pcp" (precipitation).
     """
-    return f"{_CAG_BASE}/110/{param}/12/{year}-{year}.json"
+    return f"{_CAG_BASE}/110/{param}/ytd/{end_month}/{year}-{year}.json"
 
 
 @st.cache_data(ttl=60 * 60 * 6, show_spinner=False)
@@ -101,8 +140,8 @@ def fetch_national_anomaly(year: int = None) -> tuple:
 
     msgs = []
     try:
-        # Temperature (param=1)
-        t_resp = requests.get(_cag_url(1, yr), timeout=15)
+        # Temperature (param "tavg")
+        t_resp = requests.get(_cag_url("tavg", yr), timeout=15)
         t_resp.raise_for_status()
         t_data = t_resp.json().get("data", {})
         # Latest available month is the highest YYYYMM key
@@ -124,8 +163,8 @@ def fetch_national_anomaly(year: int = None) -> tuple:
         msgs.append(f"temp FAILED: {e}")
 
     try:
-        # Precipitation (param=2)
-        p_resp = requests.get(_cag_url(2, yr), timeout=15)
+        # Precipitation (param "pcp")
+        p_resp = requests.get(_cag_url("pcp", yr), timeout=15)
         p_resp.raise_for_status()
         p_data = p_resp.json().get("data", {})
         if p_data:

@@ -370,40 +370,33 @@ with tab_noaa:
         "Day 4–8 is a smoothed 30 %-or-greater probability map."
     )
 
+    def _spc_render(label: str, entry: dict):
+        """Render an SPC outlook image with a fallback link beneath."""
+        st.markdown(f"**{label}**")
+        st.image(entry["image"], use_container_width=True)
+        st.caption(f"[Open on SPC ↗]({entry['page']}) — if the image above is blank, SPC may have moved the URL.")
+
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**Day 1**")
-        st.image(noaa.SPC_OUTLOOKS["Day 1 — Categorical"],
-                 use_container_width=True)
+        _spc_render("Day 1", noaa.SPC_OUTLOOKS["Day 1 — Categorical"])
     with c2:
-        st.markdown("**Day 2**")
-        st.image(noaa.SPC_OUTLOOKS["Day 2 — Categorical"],
-                 use_container_width=True)
+        _spc_render("Day 2", noaa.SPC_OUTLOOKS["Day 2 — Categorical"])
 
     c3, c4 = st.columns(2)
     with c3:
-        st.markdown("**Day 3**")
-        st.image(noaa.SPC_OUTLOOKS["Day 3 — Categorical"],
-                 use_container_width=True)
+        _spc_render("Day 3", noaa.SPC_OUTLOOKS["Day 3 — Categorical"])
     with c4:
-        st.markdown("**Day 4–8 Probabilistic**")
-        st.image(noaa.SPC_OUTLOOKS["Day 4-8 — Probabilistic"],
-                 use_container_width=True)
+        _spc_render("Day 4–8 Probabilistic",
+                    noaa.SPC_OUTLOOKS["Day 4-8 — Probabilistic"])
 
     with st.expander("Day 1 hazard-specific (tornado / hail / wind)"):
         h1, h2, h3 = st.columns(3)
         with h1:
-            st.markdown("**Tornado**")
-            st.image(noaa.SPC_DAY1_HAZARDS["Day 1 — Tornado"],
-                     use_container_width=True)
+            _spc_render("Tornado", noaa.SPC_DAY1_HAZARDS["Day 1 — Tornado"])
         with h2:
-            st.markdown("**Hail**")
-            st.image(noaa.SPC_DAY1_HAZARDS["Day 1 — Hail"],
-                     use_container_width=True)
+            _spc_render("Hail",    noaa.SPC_DAY1_HAZARDS["Day 1 — Hail"])
         with h3:
-            st.markdown("**Wind**")
-            st.image(noaa.SPC_DAY1_HAZARDS["Day 1 — Wind"],
-                     use_container_width=True)
+            _spc_render("Wind",    noaa.SPC_DAY1_HAZARDS["Day 1 — Wind"])
 
     # ── Section 2: US Drought Monitor ────────────────────────────────
     st.divider()
