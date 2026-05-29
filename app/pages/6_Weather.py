@@ -378,25 +378,24 @@ with tab_noaa:
 
     c1, c2 = st.columns(2)
     with c1:
-        _spc_render("Day 1", noaa.SPC_OUTLOOKS["Day 1 — Categorical"])
+        _spc_render("Day 1", noaa.get_spc_outlook(1))
     with c2:
-        _spc_render("Day 2", noaa.SPC_OUTLOOKS["Day 2 — Categorical"])
+        _spc_render("Day 2", noaa.get_spc_outlook(2))
 
     c3, c4 = st.columns(2)
     with c3:
-        _spc_render("Day 3", noaa.SPC_OUTLOOKS["Day 3 — Categorical"])
+        _spc_render("Day 3", noaa.get_spc_outlook(3))
     with c4:
-        _spc_render("Day 4–8 Probabilistic",
-                    noaa.SPC_OUTLOOKS["Day 4-8 — Probabilistic"])
+        _spc_render("Day 4–8 Probabilistic", noaa.SPC_DAY_4_8)
 
     with st.expander("Day 1 hazard-specific (tornado / hail / wind)"):
         h1, h2, h3 = st.columns(3)
         with h1:
-            _spc_render("Tornado", noaa.SPC_DAY1_HAZARDS["Day 1 — Tornado"])
+            _spc_render("Tornado", noaa.get_spc_outlook(1, "torn"))
         with h2:
-            _spc_render("Hail",    noaa.SPC_DAY1_HAZARDS["Day 1 — Hail"])
+            _spc_render("Hail",    noaa.get_spc_outlook(1, "hail"))
         with h3:
-            _spc_render("Wind",    noaa.SPC_DAY1_HAZARDS["Day 1 — Wind"])
+            _spc_render("Wind",    noaa.get_spc_outlook(1, "wind"))
 
     # ── Section 2: US Drought Monitor ────────────────────────────────
     st.divider()
@@ -427,35 +426,16 @@ with tab_noaa:
 
     # ── Section 3: NCEI Climate at a Glance ──────────────────────────
     st.divider()
-    st.markdown("##### 🌡️ NCEI Climate at a Glance — National YTD")
+    st.markdown("##### 🌡️ NCEI Climate at a Glance")
     st.caption(
-        "Contiguous-US average temperature and total precipitation "
-        "year-to-date, vs the 1901–2000 long-term average. Updated "
-        "monthly by NOAA's National Centers for Environmental Information."
+        "Contiguous-US temperature and precipitation anomalies year-to-date, "
+        "vs the 20th-century average. Updated monthly by NOAA's National "
+        "Centers for Environmental Information. Click any link below to "
+        "open the live data view in a new tab."
     )
 
-    with st.spinner("Fetching NCEI Climate at a Glance…"):
-        snap, msg = noaa.fetch_national_anomaly()
-
-    if snap.get("through_month"):
-        st.caption(f"Through: **{snap['through_month']}**  ·  status: {msg}")
-        m1, m2, m3, m4 = st.columns(4)
-        if snap["ytd_temp_value_f"] is not None:
-            m1.metric("YTD Avg Temp",
-                      f"{snap['ytd_temp_value_f']:.1f}°F")
-        if snap["ytd_temp_anomaly_f"] is not None:
-            m2.metric("vs 20th-c Avg",
-                      f"{snap['ytd_temp_anomaly_f']:+.1f}°F",
-                      delta=f"Rank {snap['ytd_temp_rank']}" if snap.get("ytd_temp_rank") else None)
-        if snap["ytd_precip_value_in"] is not None:
-            m3.metric("YTD Precip",
-                      f"{snap['ytd_precip_value_in']:.2f}\"")
-        if snap["ytd_precip_anomaly_in"] is not None:
-            m4.metric("vs 20th-c Avg",
-                      f"{snap['ytd_precip_anomaly_in']:+.2f}\"",
-                      delta=f"Rank {snap['ytd_precip_rank']}" if snap.get("ytd_precip_rank") else None)
-    else:
-        st.warning(f"NCEI Climate at a Glance did not return data: {msg}")
+    for label, url in noaa.NCEI_LINKS.items():
+        st.markdown(f"- [{label} ↗]({url})")
 
     # ── Helpful external links ───────────────────────────────────────
     st.divider()
