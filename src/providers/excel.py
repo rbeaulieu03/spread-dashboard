@@ -1,40 +1,41 @@
 """
 excel.py
 --------
-Reads futures contract price data from ProphetX Excel export files.
+Reads futures contract price data from ProphetX Excel export files,
+merges with the Parquet cache, and tops up missing days via yfinance.
 
-EXPECTED FILE FORMAT
----------------------
-One Excel file per commodity, saved in the data/prophetx/ folder.
-Files must be named exactly:
-    corn.xlsx
-    wheat.xlsx
-    soymeal.xlsx
-    cattle.xlsx
-    hogs.xlsx
-    natgas.xlsx
+FLOW
+----
+1. Parse the Excel file (historical baseline).
+2. Pass each contract's series through parquet_cache.get_contract_prices(),
+   which merges the Excel history into the Parquet file, fetches any missing
+   recent days from yfinance, and saves the result back to disk.
+3. Return the fully up-to-date series to the rest of the app.
 
-EXPECTED SHEET LAYOUT (paste-as-values from ProphetX Add-In):
+After running scripts/migrate_to_parquet.py once, the Parquet cache is
+pre-seeded and the Excel files become an archive. The app will continue to
+function even if the Excel files are removed.
+
+EXPECTED FILE FORMAT (data/prophetx/)
+--------------------------------------
+One Excel file per commodity:
+    corn.xlsx, wheat.xlsx, soymeal.xlsx, cattle.xlsx, hogs.xlsx, natgas.xlsx
+
     Row 1:  DAILY    | @CN26  | @CU26  | @CZ26  | ...
     Row 2:  (blank or "Description" — skipped)
     Row 3:  Date     | Close  | Close  | Close  | ...
     Row 4+: 46085    | 451.50 | 402.00 | ---    | ...
 
-    - Date column contains Excel serial date numbers (e.g. 46085)
-    - Price columns contain decimal numbers (e.g. 451.5000)
-    - Missing data shows as "---" or is blank
-
-ADDING MORE YEARS LATER
-------------------------
-Simply add more contract columns to your Excel file (e.g. add @CN20 for
-an older year), paste updated data, save, and push to GitHub.
-The app will automatically pick up the new columns with no code changes.
+    - Date column: Excel serial date numbers (e.g. 46085)
+    - Price columns: decimal numbers (e.g. 451.5000)
+    - Missing data: "---" or blank
 """
 
 import pandas as pd
 import numpy as np
 import os
 import streamlit as st
+from src.providers.parquet_cache import get_contract_prices, load_from_cache
 
 # Path to the ProphetX Excel data folder
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,22 +43,22 @@ _DATA_DIR     = os.path.join(_PROJECT_ROOT, "data", "prophetx")
 
 # Map commodity names (as used in spreads.yaml) to Excel filenames
 _COMMODITY_FILES = {
-    "Corn":       "corn.xlsx",
-    "Wheat":      "wheat.xlsx",
-    "SoyMeal":    "soymeal.xlsx",
-    "LiveCattle": "cattle.xlsx",
-    "LeanHogs":   "hogs.xlsx",
-    "NatGas":     "natgas.xlsx",
-    "KCWheat":    "kcwheat.xlsx",
-    "SoyOil":      "soyoil.xlsx",
-    "LeanHogIndex": "hog_index.xlsx",
-    "FeederCattle": "feeder.xlsx",
-    "FeederCattleIndex": "feeder_index.xlsx",
-    "WheatCorn":   None,   # intercommodity — no own file
+    "Corn":                 "corn.xlsx",
+    "Wheat":                "wheat.xlsx",
+    "SoyMeal":              "soymeal.xlsx",
+    "LiveCattle":           "cattle.xlsx",
+    "LeanHogs":             "hogs.xlsx",
+    "NatGas":               "natgas.xlsx",
+    "KCWheat":              "kcwheat.xlsx",
+    "SoyOil":               "soyoil.xlsx",
+    "LeanHogIndex":         "hog_index.xlsx",
+    "FeederCattle":         "feeder.xlsx",
+    "FeederCattleIndex":    "feeder_index.xlsx",
+    "WheatCorn":            None,   # intercommodity — no own file
 }
 
 
-# ── Excel serial date conversion ─────────────────────────────────────────────
+# ── Excel serial date conversion ──────────────────────────────────────────────
 
 def _excel_serial_to_date(serial) -> pd.Timestamp | None:
     """
@@ -74,7 +75,7 @@ def _excel_serial_to_date(serial) -> pd.Timestamp | None:
     # Try as Excel serial number first (pure integer or float string)
     try:
         serial_int = int(float(val))
-        # Sanity check: valid Excel dates are roughly 30000-50000 for years 1982-2036
+        # Sanity check: valid Excel dates are roughly 30000-60000 for years 1982-2064
         if 30000 < serial_int < 60000:
             return pd.Timestamp("1899-12-30") + pd.Timedelta(days=serial_int)
     except (ValueError, TypeError):
@@ -89,12 +90,13 @@ def _excel_serial_to_date(serial) -> pd.Timestamp | None:
     return None
 
 
-# ── File loading ──────────────────────────────────────────────────────────────
+# ── File loading ───────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_commodity_file(commodity: str) -> tuple:
     """
-    Load and parse a ProphetX Excel file for one commodity.
+    Load price data for one commodity, merging Excel history with the
+    Parquet cache and topping up recent days from yfinance.
 
     Returns
     -------
@@ -108,11 +110,26 @@ def load_commodity_file(commodity: str) -> tuple:
         return {}, f"No file mapping defined for commodity '{commodity}'"
 
     filepath = os.path.join(_DATA_DIR, filename)
+
+    # ── Excel file missing — serve from Parquet cache if available ────────────
     if not os.path.exists(filepath):
+        import glob as _glob
+        from src.providers.parquet_cache import _CACHE_DIR
+        cached_contracts = {}
+        for cache_file in _glob.glob(os.path.join(_CACHE_DIR, "*.parquet")):
+            symbol = os.path.splitext(os.path.basename(cache_file))[0]
+            series, _ = get_contract_prices(symbol)
+            if series is not None:
+                cached_contracts[symbol] = series
+        if cached_contracts:
+            return cached_contracts, (
+                f"Cache-only — {filename} not present. "
+                f"Serving {len(cached_contracts)} contracts from Parquet cache."
+            )
         return {}, (
             f"File not found: data/prophetx/{filename}. "
-            f"Please create this file using the ProphetX Excel Add-In "
-            f"and place it in the data/prophetx/ folder."
+            f"Run scripts/migrate_to_parquet.py to seed the cache, or place "
+            f"the file back in data/prophetx/."
         )
 
     try:
@@ -122,7 +139,7 @@ def load_commodity_file(commodity: str) -> tuple:
         if raw.shape[0] < 4:
             return {}, f"{filename}: file has fewer than 4 rows — check the format."
 
-        # ── Find the ticker row (row 0) and date/close row (row 2) ──────────
+        # ── Find the ticker row (row 0) and date/close row (row 2) ───────────
         # Row 0: "DAILY", "@CN26", "@CU26", ...
         # Row 2: "Date",  "Close", "Close", ...
         ticker_row = raw.iloc[0].tolist()   # ["DAILY", "@CN26", "@CU26", ...]
@@ -141,9 +158,9 @@ def load_commodity_file(commodity: str) -> tuple:
                 ticker_col_indices.append(col_idx)
 
         if not tickers:
-            return {}, f"{filename}: no ProphetX symbols (starting with @) found in row 1."
+            return {}, f"{filename}: no ProphetX symbols found in row 1."
 
-        # ── Parse date column ────────────────────────────────────────────────
+        # ── Parse date column ─────────────────────────────────────────────────
         date_col_raw = raw.iloc[data_start:, 0].tolist()
         dates = []
         valid_row_mask = []
@@ -162,7 +179,7 @@ def load_commodity_file(commodity: str) -> tuple:
                 valid_row_mask.append(True)
                 dates.append(ts)
 
-        # ── Build one Series per contract ────────────────────────────────────
+        # ── Build one Series per contract, pass through cache layer ───────────
         contract_data = {}
 
         for ticker, col_idx in zip(tickers, ticker_col_indices):
@@ -170,9 +187,7 @@ def load_commodity_file(commodity: str) -> tuple:
             prices = []
             price_dates = []
 
-            for i, (valid, date, price_str) in enumerate(
-                zip(valid_row_mask, dates, price_col_raw)
-            ):
+            for valid, dt, price_str in zip(valid_row_mask, dates, price_col_raw):
                 if not valid:
                     continue
                 price_str = str(price_str).strip()
@@ -181,26 +196,29 @@ def load_commodity_file(commodity: str) -> tuple:
                 try:
                     price = float(price_str)
                     prices.append(price)
-                    price_dates.append(date)
+                    price_dates.append(dt)
                 except ValueError:
                     continue
 
             if prices:
-                series = pd.Series(
+                excel_series = pd.Series(
                     data  = prices,
                     index = pd.DatetimeIndex(price_dates),
                     name  = ticker,
                 ).sort_index()
-                # Remove any duplicate dates (keep last)
-                series = series[~series.index.duplicated(keep="last")]
-                contract_data[ticker] = series
+                excel_series = excel_series[~excel_series.index.duplicated(keep="last")]
+
+                # Merge Excel history into Parquet cache, top up via yfinance,
+                # and persist — so the Excel file is never needed again.
+                cached_series, _ = get_contract_prices(ticker, excel_series=excel_series)
+                contract_data[ticker] = cached_series if cached_series is not None else excel_series
 
         if not contract_data:
             return {}, f"{filename}: file was read but no valid price data was found."
 
         status = (
-            f"OK — {filename} loaded. "
-            f"{len(contract_data)} contracts found: {', '.join(sorted(contract_data.keys()))}"
+            f"OK — {filename} loaded & cached. "
+            f"{len(contract_data)} contracts: {', '.join(sorted(contract_data.keys()))}"
         )
         return contract_data, status
 
@@ -208,7 +226,7 @@ def load_commodity_file(commodity: str) -> tuple:
         return {}, f"Error reading {filename}: {e}"
 
 
-# ── Symbol building ───────────────────────────────────────────────────────────
+# ── Symbol building ────────────────────────────────────────────────────────────
 
 def build_prophetx_symbol(prophetx_prefix: str, month_code: str, year: int) -> str:
     """
@@ -228,7 +246,7 @@ def build_prophetx_symbol(prophetx_prefix: str, month_code: str, year: int) -> s
     return f"{prophetx_prefix}{month_code}{year_2digit}"
 
 
-# ── Spread fetching ───────────────────────────────────────────────────────────
+# ── Spread fetching ────────────────────────────────────────────────────────────
 
 def _get_leg_data(leg: dict, default_commodity: str, default_prefix: str, season_year: int) -> tuple:
     """
@@ -244,7 +262,7 @@ def _get_leg_data(leg: dict, default_commodity: str, default_prefix: str, season
     """
     from src.config import load_spreads_config, get_commodity_info
 
-    # ── Type 3: continuous/index leg ─────────────────────────────────────────
+    # ── Type 3: continuous/index leg ──────────────────────────────────────────
     if leg.get("type") == "continuous":
         symbol        = leg["symbol"]
         leg_commodity = leg.get("commodity", default_commodity)
@@ -259,7 +277,7 @@ def _get_leg_data(leg: dict, default_commodity: str, default_prefix: str, season
 
         return symbol, prices, f"OK — {len(prices)} days"
 
-    # ── Types 1 & 2: contract-month legs ─────────────────────────────────────
+    # ── Types 1 & 2: contract-month legs ──────────────────────────────────────
     leg_commodity = leg.get("commodity", default_commodity)
     leg_year      = season_year + leg.get("year_offset", 0)
 

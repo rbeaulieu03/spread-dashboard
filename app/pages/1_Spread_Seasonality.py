@@ -69,8 +69,8 @@ with st.sidebar:
     show_percentile = st.toggle("Show 10th–90th % Band", value=True)
 
     st.divider()
-    st.caption("Data source: ProphetX (via Excel)")
-    st.caption("To update data: add rows to the Excel file and push to GitHub.")
+    st.caption("Data source: Parquet cache + yfinance (auto-updated daily)")
+    st.caption("Run scripts/migrate_to_parquet.py once to seed cache from Excel.")
 
 # ── Guard ─────────────────────────────────────────────────────────────────────
 if not selected_years:
