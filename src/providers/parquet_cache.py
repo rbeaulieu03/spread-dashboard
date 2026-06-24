@@ -210,9 +210,10 @@ def get_contract_prices(
         last_date = cached.index[-1].date()
         days_old  = (today - last_date).days
 
-        # Top up if data is at least 1 calendar day old AND the contract
-        # hasn't been expired for more than ~2 years (730 days)
-        contract_likely_active = days_old < 730
+        # Top up only if the last known data is within 45 days.
+        # Contracts with data older than 45 days have almost certainly
+        # expired — attempting yfinance on them produces noisy failures.
+        contract_likely_active = days_old < 45
 
         if contract_likely_active and (days_old >= 1 or force_refresh):
             fetch_from = last_date + timedelta(days=1)

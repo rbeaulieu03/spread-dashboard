@@ -230,7 +230,7 @@ with tab_cash:
     fig.update_xaxes(title=dict(text="Week Ending Date", font=dict(size=13, color=_TICK_COLOR)),
                      tickfont=dict(size=11, color=_TICK_COLOR),
                      gridcolor=_GRID, linecolor=_LINE, showline=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     c1, c2, c3, c4 = st.columns(4)
 
@@ -339,7 +339,7 @@ with tab_spread:
             title=dict(text="Week Ending Date", font=dict(size=13, color=_TICK_COLOR)),
             tickfont=dict(size=11, color=_TICK_COLOR),
             gridcolor=_GRID, linecolor=_LINE, showline=True)
-        st.plotly_chart(fig_spread, use_container_width=True)
+        st.plotly_chart(fig_spread, width="stretch")
 
         latest_spread = spread.iloc[-1]
         avg_spread    = spread.mean()

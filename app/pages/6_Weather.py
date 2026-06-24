@@ -235,7 +235,7 @@ def _render_tab(locations: dict, label: str, cpc_caption: str):
             with col:
                 df = results.get(name, pd.DataFrame())
                 fig = _location_chart(name, locations[name]["region"], df)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
     # ── CPC 6-10 / 8-14 day outlook embed ────────────────────────────────
     st.divider()
@@ -373,7 +373,7 @@ with tab_noaa:
     def _spc_render(label: str, entry: dict):
         """Render an SPC outlook image with a fallback link beneath."""
         st.markdown(f"**{label}**")
-        st.image(entry["image"], use_container_width=True)
+        st.image(entry["image"], width="stretch")
         st.caption(f"[Open on SPC ↗]({entry['page']}) — if the image above is blank, SPC may have moved the URL.")
 
     c1, c2 = st.columns(2)
@@ -407,7 +407,7 @@ with tab_noaa:
     )
 
     st.markdown("**Current week**")
-    st.image(noaa.USDM_MAPS["Current week"], use_container_width=True)
+    st.image(noaa.USDM_MAPS["Current week"], width="stretch")
 
     with st.expander("Change comparisons (1 / 4 / 12 weeks ago)"):
         cc1, cc2, cc3 = st.columns(3)

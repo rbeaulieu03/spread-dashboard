@@ -235,7 +235,7 @@ fig.update_layout(
     margin = dict(l=70, r=140, t=60, b=90),
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 # ── Quick stats ───────────────────────────────────────────────────────────────
 if highlight_year in pivot.columns:

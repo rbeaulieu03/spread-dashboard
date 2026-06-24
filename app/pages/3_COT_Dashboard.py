@@ -420,7 +420,7 @@ with tab_deep:
                 row=2, col=1,
             )
 
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width="stretch")
 
         # ── Chart 2: Gross Longs vs Shorts ────────────────────────────────
         st.markdown(f"##### {meta['display']} — MM Gross Longs vs. Shorts")
@@ -466,7 +466,7 @@ with tab_deep:
                 zerolinecolor = _ZERO_LINE,
             ),
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
         st.divider()
         st.download_button(
@@ -596,7 +596,7 @@ with tab_flow:
             yaxis      = dict(tickfont=dict(size=12, color=_FONT_COLOR), gridcolor=_GRID),
             showlegend = False,
         )
-        st.plotly_chart(fig_flow, use_container_width=True)
+        st.plotly_chart(fig_flow, width="stretch")
 
         st.divider()
         st.download_button(
@@ -774,7 +774,7 @@ with tab_scatter:
                 ),
             )
 
-            st.plotly_chart(fig_sc, use_container_width=True)
+            st.plotly_chart(fig_sc, width="stretch")
 
             q1, q2, q3 = st.columns(3)
             q1.metric(

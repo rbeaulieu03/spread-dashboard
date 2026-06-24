@@ -130,7 +130,7 @@ else:
         show_average         = show_average,
         show_percentile_band = show_percentile,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # ── Quick stats ───────────────────────────────────────────────────────────
     highlight_year = max(selected_years)
