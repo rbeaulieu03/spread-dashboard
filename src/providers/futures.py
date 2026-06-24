@@ -107,6 +107,24 @@ def get_commodity_contracts(
     return contracts
 
 
+# ── Excel fallback / auto-seeder ──────────────────────────────────────────────
+
+def _seed_from_excel(symbol: str, commodity: str) -> pd.Series | None:
+    """
+    On a Parquet cache miss, load the commodity's Excel file via excel.py.
+    excel.py automatically seeds the Parquet cache for every contract it
+    parses, so after this call subsequent lookups hit Parquet directly.
+
+    Returns the price Series for `symbol`, or None if not found.
+    """
+    try:
+        from src.providers.excel import load_commodity_file
+        contract_data, _ = load_commodity_file(commodity)
+        return contract_data.get(symbol)
+    except Exception:
+        return None
+
+
 # ── Spread leg resolution ──────────────────────────────────────────────────────
 
 def _resolve_leg(
@@ -134,10 +152,16 @@ def _resolve_leg(
     """
     # ── Type 3: continuous / cash index ───────────────────────────────────────
     if leg.get("type") == "continuous":
-        symbol = leg["symbol"]
-        series, msg = get_contract_prices(symbol)
+        symbol       = leg["symbol"]
+        leg_commodity = leg.get("commodity", default_commodity)
+        series, _    = get_contract_prices(symbol)
+
         if series is None:
-            return symbol, None, f"NOT FOUND — {symbol} not in cache. Run the migration script."
+            # Cache miss — seed from the commodity's Excel file
+            series = _seed_from_excel(symbol, leg_commodity)
+
+        if series is None:
+            return symbol, None, f"NOT FOUND — {symbol} missing from cache and Excel file."
         return symbol, series, f"OK — {len(series)} days through {series.index[-1].date()}"
 
     # ── Types 1 & 2: specific contract month ──────────────────────────────────
@@ -157,13 +181,19 @@ def _resolve_leg(
         return None, None, f"FAILED — no prophetx_prefix defined for {leg_commodity}"
 
     symbol = build_symbol(prefix, leg["month"], leg_year)
-    series, msg = get_contract_prices(symbol)
+    series, _ = get_contract_prices(symbol)
+
+    if series is None:
+        # Cache miss — seed the entire commodity's Excel file into the cache,
+        # then try again. After this first load the Parquet files exist and
+        # subsequent loads bypass Excel entirely.
+        series = _seed_from_excel(symbol, leg_commodity)
 
     if series is None:
         return (
             symbol, None,
-            f"NOT FOUND — {symbol} not in cache. "
-            f"Add it to the Excel file and re-run scripts/migrate_to_parquet.py."
+            f"NOT FOUND — {symbol} missing from cache and Excel file. "
+            f"Check that the contract column exists in data/prophetx/."
         )
 
     return symbol, series, f"OK — {len(series)} days through {series.index[-1].date()}"
