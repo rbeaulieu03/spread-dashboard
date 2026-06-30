@@ -153,6 +153,9 @@ def _yfinance_fetch(yahoo_ticker: str, start: date) -> pd.Series | None:
                 continue
 
             prices.index = pd.DatetimeIndex(prices.index).normalize()
+            # Strip timezone so comparisons with tz-naive cache don't raise
+            if prices.index.tz is not None:
+                prices.index = prices.index.tz_convert(None)
             return prices
 
         except Exception:

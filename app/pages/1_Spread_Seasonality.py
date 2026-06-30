@@ -105,11 +105,11 @@ st.title(f"{commodity}  ·  {spread_name} Spread")
 if pivot.empty:
     # Surface exactly what failed so the user knows how to fix it
     failed = [
-        f"**{yr}** — {st['spread_status']} "
-        f"(leg 1: {st['leg1_symbol']} {st['leg1_status'] or ''} / "
-        f"leg 2: {st['leg2_symbol']} {st['leg2_status'] or ''})"
-        for yr, st in fetch_status.items()
-        if not (st.get("spread_status") or "").startswith("OK")
+        f"**{yr}** — {info['spread_status']} "
+        f"(leg 1: {info['leg1_symbol']} {info['leg1_status'] or ''} / "
+        f"leg 2: {info['leg2_symbol']} {info['leg2_status'] or ''})"
+        for yr, info in fetch_status.items()
+        if not (info.get("spread_status") or "").startswith("OK")
     ]
     st.error(
         "No data could be loaded for this spread. "
