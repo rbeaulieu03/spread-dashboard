@@ -5,5 +5,5 @@ pyyaml
 plotly
 openpyxl
 requests
-yfinance
+yfinance>=1.4.1
 pyarrow
